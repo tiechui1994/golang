@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func GerneratePng() {
+func GeneratePng() {
 	const (
 		width  = 300
 		height = 500
@@ -47,6 +47,6 @@ func Png2Jpeg() {
 }
 
 func TestPng(t *testing.T) {
-	GerneratePng()
+	GeneratePng()
 	Png2Jpeg()
 }

@@ -12,8 +12,10 @@
 *.out
 
 # user settings
+.idea/
 bin/
 pkg/
+test/
 *.pdf
 *.png
 *.jpg
