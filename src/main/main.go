@@ -1,14 +1,14 @@
 package main
 
-import (
-	"fmt"
-	"net/http"
-)
+var done = make(chan bool, 1)
+var msg string
 
+func aGoroutine() {
+	msg = "你好, 世界"
+	done <- true
+}
 func main() {
-	http.HandleFunc("/get", func(writer http.ResponseWriter, request *http.Request) {
-		fmt.Printf("%+v\n", request)
-		writer.Write([]byte("Hello World"))
-	})
-	http.ListenAndServe("127.0.0.1:8000", nil)
+	go aGoroutine()
+	<- done
+	println(msg)
 }
