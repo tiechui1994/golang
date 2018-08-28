@@ -173,8 +173,9 @@ Channel通信:
 		}
 	}
 
-	4. 发布/订阅模型
-	参考下面的例子
+	4. 发布/订阅模型(Publisher, Topic, Subscriber)
+	1) 发布者: 维持一个map, key是Subscriber, value是Topic
+	2) 订阅者:
 */
 
 type (
@@ -220,6 +221,7 @@ func (p *Publisher) Evict(sub chan interface{}) {
 	close(sub)
 }
 
+// 发布
 func (p *Publisher) Publish(v interface{}) {
 	p.m.RLock()
 	defer p.m.RUnlock()
@@ -251,6 +253,46 @@ func (p *Publisher) sendTopic(sub subscriber, topic topicFunc, v interface{}, wg
 	select {
 	case sub <- v:
 	case <-time.After(p.timeout):
-
 	}
 }
+
+/*
+控制并发数:
+	go自带的godoc程序实现了一个vfs的包对应虚拟的的文件系统, 在vfs包下面有一个gatefs的子包, gatefs子包的
+	目的就是为了控制访问虚拟文件系统最大的并发数.
+	并发控制: 通过带缓存管道的发送和接收规则来实现最大并发阻塞
+
+	vfs.OS(root string) FileSystem  //基于本地文件系统构造一个虚拟的文件系统
+	gatefs.New(fs vfs.FileSystem, gateCh chan bool) vfs.FileSystem //基于现有的虚拟文件系统构造
+	一个并发受控的虚拟文件系统.
+
+	gatefs 对并发受控抽象了一个类型gate, 增加了enter和leave方法分别对应并发代码的进入和离开. 当超出并发数
+	量超过限制的时候, enter方法会阻塞直到并发数量降下来为止.
+*/
+
+
+/*
+并发的安全退出:
+	Go语言中不同Goroutine之间主要依靠管道进行通信和同步.要同时处理多个管道的发送或接收操作,我们需要使用select关
+	键字(这个关键字和网络编程中的select函数的行为类似). 当select有多个分支时,会随机选择一个可用的管道分支,如果
+	没有可用的管道分支则选择default分支,否则会一直保存阻塞状态.
+
+	// 管道超时判断
+	select {
+	case v := <-in:
+		fmt.Println(v)
+	case <-time.After(time.Second):
+		return
+	}
+
+	// 非阻塞管道发生或接收
+	select{
+	case v := <-in:
+		fmt.Println(v)
+	default:
+
+	}
+
+	// 阻止main函数退出
+	select{}
+*/
