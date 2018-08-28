@@ -18,7 +18,7 @@ var total struct {
 	value int
 }
 
-func Worker(wg *sync.WaitGroup) {
+func Work(wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	for i := 0; i < 100; i++ {
@@ -33,8 +33,8 @@ func Main() {
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	go Worker(&wg)
-	go Worker(&wg)
+	go Work(&wg)
+	go Work(&wg)
 
 	wg.Wait()
 	fmt.Println(total.value)
