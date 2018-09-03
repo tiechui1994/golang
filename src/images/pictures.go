@@ -7,17 +7,16 @@ import (
 	"image/jpeg"
 	"image/png"
 	"os"
-	"testing"
 )
 
-func GeneratePng() {
+func DrawPNG(srcPath string) {
 	const (
 		width  = 300
 		height = 500
 	)
 
 	// 文件
-	pngFile, _ := os.Create("image.png")
+	pngFile, _ := os.Create(srcPath)
 	defer pngFile.Close()
 
 	// Image, 进行绘图操作
@@ -32,21 +31,24 @@ func GeneratePng() {
 	png.Encode(pngFile, pngImage)
 }
 
-func Png2Jpeg() {
-	srcFile, _ := os.Open("image.png")
+
+func ConvertPNG2JPEG(srcPath, dstPath string) (err error) {
+	srcFile, err := os.Open(srcPath)
+	if err != nil {
+		return
+	}
 	defer srcFile.Close()
 
-	destFile, _ := os.Create("image.jpg")
-	defer destFile.Close()
+	dstFile, err := os.Create(dstPath)
+	if err != nil {
+		return
+	}
+	defer dstFile.Close()
 
 	srcImage, _ := png.Decode(srcFile)
-	destImage := image.NewRGBA(srcImage.Bounds())
-	draw.Draw(destImage, destImage.Bounds(), srcImage, srcImage.Bounds().Min, draw.Src)
+	dstImage := image.NewRGBA(srcImage.Bounds())
+	draw.Draw(dstImage, dstImage.Bounds(), srcImage, srcImage.Bounds().Min, draw.Src)
 
-	jpeg.Encode(destFile, destImage, nil)
-}
-
-func TestPng(t *testing.T) {
-	GeneratePng()
-	Png2Jpeg()
+	jpeg.Encode(dstFile, dstImage, nil)
+	return
 }

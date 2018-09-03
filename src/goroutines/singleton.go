@@ -59,7 +59,7 @@ var (
 	once Once
 )
 
-func OnceInsatnce() *singleton {
+func OnceInstance() *singleton {
 	once.Do(func() {
 		inst = &singleton{}
 	})
