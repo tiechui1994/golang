@@ -331,12 +331,13 @@ func (w *fileLogWriter) doRotate(logTime time.Time) error {
 		goto RESTART_LOGGER
 	}
 
-	err = os.Chmod(fName, os.FileMode(rotatePerm))
+	err = os.Chmod(fName, os.FileMode(rotatePerm)) // 修改历史的文件的权限
 
+	//在命名失败 或者 文件被删除, 正常执行到此都会执行
 RESTART_LOGGER:
 
-	startLoggerErr := w.startLogger()
-	go w.deleteOldLog()
+	startLoggerErr := w.startLogger() // 重新启动log
+	go w.deleteOldLog() //删除旧文件
 
 	if startLoggerErr != nil {
 		return fmt.Errorf("Rotate StartLogger: %s", startLoggerErr)
@@ -347,6 +348,7 @@ RESTART_LOGGER:
 	return nil
 }
 
+// 删除文件(??) 问题是最大文件数目没有作用?
 func (w *fileLogWriter) deleteOldLog() {
 	dir := filepath.Dir(w.Filename)
 	filepath.Walk(dir, func(path string, info os.FileInfo, err error) (returnErr error) {
