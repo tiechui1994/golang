@@ -42,7 +42,7 @@ const (
 // the real log level will be LevelEmergency
 const levelLoggerImpl = -1
 
-// Name for adapter with beego official support
+// 官方实现的Log
 const (
 	AdapterConsole   = "console"
 	AdapterFile      = "file"
@@ -63,6 +63,7 @@ const (
 )
 
 type newLoggerFunc func() Logger
+// Log的顶层接口
 type Logger interface {
 	Init(config string) error
 	WriteMsg(when time.Time, msg string, level int) error
@@ -73,7 +74,7 @@ type Logger interface {
 var adapters = make(map[string]newLoggerFunc) // log形式
 var levelPrefix = [LevelDebug + 1]string{"[M] ", "[A] ", "[C] ", "[E] ", "[W] ", "[N] ", "[I] ", "[D] "}
 
-// 注册log
+// 注册的方式增加Logger的实现
 func Register(name string, log newLoggerFunc) {
 	if log == nil {
 		panic("logs: Register provide is nil")
@@ -84,10 +85,10 @@ func Register(name string, log newLoggerFunc) {
 	adapters[name] = log
 }
 
-// 命名log接口
+// 消息
 type nameLogger struct {
 	Logger
-	name string
+	name string  //adapter的名称
 }
 
 // Log消息定义
@@ -117,8 +118,7 @@ const defaultAsyncMsgLen = 1e3 //异步log的通道的长度
 // 一个sync.Pool对象就是一组临时对象的集合.Pool是协程安全的. Pool用于存储那些被分配了但是没有被使用,而未来可能会使用的值,以减小垃圾回收的压力
 var logMsgPool *sync.Pool
 
-// channelLen 表示chan中的消息数(asynchronous为true时使用).
-// 如果缓冲chan已满, 则日志写入文件或其他方式。
+// 返回一个Logger实例
 func NewLogger(channelLens ...int64) *BeeLogger {
 	bl := new(BeeLogger)
 	bl.level = LevelDebug
@@ -132,7 +132,7 @@ func NewLogger(channelLens ...int64) *BeeLogger {
 	return bl
 }
 
-// 将日志设置为异步并启动goroutine
+// 异步启动日志(默认是同步启动)
 func (bl *BeeLogger) Async(msgLen ...int64) *BeeLogger {
 	bl.lock.Lock()
 	defer bl.lock.Unlock()
@@ -155,6 +155,7 @@ func (bl *BeeLogger) Async(msgLen ...int64) *BeeLogger {
 	return bl
 }
 
+// 实例化并初始化一个Adapter, 这里的配置信息是Adapter的配置信息, 切记,切记
 func (bl *BeeLogger) setLogger(adapterName string, configs ...string) error {
 	config := append(configs, "{}")[0]
 	for _, l := range bl.outputs {
@@ -168,8 +169,8 @@ func (bl *BeeLogger) setLogger(adapterName string, configs ...string) error {
 		return fmt.Errorf("logs: unknown adaptername %q (forgotten Register?)", adapterName)
 	}
 
-	lg := log()
-	err := lg.Init(config)
+	lg := log() //创建一个引擎实例
+	err := lg.Init(config) // 初始化
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "logs.BeeLogger.SetLogger: "+err.Error())
 		return err
@@ -178,7 +179,7 @@ func (bl *BeeLogger) setLogger(adapterName string, configs ...string) error {
 	return nil
 }
 
-// 为给定的Adapter设置配置参数, 配置参数是JSON格式的字符串, {"interval": 360}
+// 增加Adapter
 func (bl *BeeLogger) SetLogger(adapterName string, configs ...string) error {
 	bl.lock.Lock()
 	defer bl.lock.Unlock()
@@ -208,7 +209,7 @@ func (bl *BeeLogger) DelLogger(adapterName string) error {
 	return nil
 }
 
-// 写日志
+// 日志分发
 func (bl *BeeLogger) writeToLoggers(when time.Time, msg string, level int) {
 	for _, l := range bl.outputs {
 		err := l.WriteMsg(when, msg, level)
@@ -377,7 +378,6 @@ func (bl *BeeLogger) Warning(format string, v ...interface{}) {
 	bl.writeMsg(LevelWarn, format, v...)
 }
 
-// Notice Log NOTICE level message.
 func (bl *BeeLogger) Notice(format string, v ...interface{}) {
 	if LevelNotice > bl.level {
 		return
@@ -385,7 +385,6 @@ func (bl *BeeLogger) Notice(format string, v ...interface{}) {
 	bl.writeMsg(LevelNotice, format, v...)
 }
 
-// Informational Log INFORMATIONAL level message.
 func (bl *BeeLogger) Informational(format string, v ...interface{}) {
 	if LevelInfo > bl.level {
 		return
@@ -393,7 +392,6 @@ func (bl *BeeLogger) Informational(format string, v ...interface{}) {
 	bl.writeMsg(LevelInfo, format, v...)
 }
 
-// Debug Log DEBUG level message.
 func (bl *BeeLogger) Debug(format string, v ...interface{}) {
 	if LevelDebug > bl.level {
 		return
@@ -401,8 +399,6 @@ func (bl *BeeLogger) Debug(format string, v ...interface{}) {
 	bl.writeMsg(LevelDebug, format, v...)
 }
 
-// Warn Log WARN level message.
-// compatibility alias for Warning()
 func (bl *BeeLogger) Warn(format string, v ...interface{}) {
 	if LevelWarn > bl.level {
 		return
@@ -410,8 +406,6 @@ func (bl *BeeLogger) Warn(format string, v ...interface{}) {
 	bl.writeMsg(LevelWarn, format, v...)
 }
 
-// Info Log INFO level message.
-// compatibility alias for Informational()
 func (bl *BeeLogger) Info(format string, v ...interface{}) {
 	if LevelInfo > bl.level {
 		return
@@ -419,8 +413,6 @@ func (bl *BeeLogger) Info(format string, v ...interface{}) {
 	bl.writeMsg(LevelInfo, format, v...)
 }
 
-// Trace Log TRACE level message.
-// compatibility alias for Debug()
 func (bl *BeeLogger) Trace(format string, v ...interface{}) {
 	if LevelDebug > bl.level {
 		return
@@ -428,7 +420,7 @@ func (bl *BeeLogger) Trace(format string, v ...interface{}) {
 	bl.writeMsg(LevelDebug, format, v...)
 }
 
-// 刷新日志.(同步和异步)
+// 刷新日志.(同步直接刷新, 异步发送信号进行刷新)
 func (bl *BeeLogger) Flush() {
 	if bl.asynchronous {
 		bl.signalChan <- "flush"
