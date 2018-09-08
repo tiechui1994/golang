@@ -27,6 +27,8 @@ import (
  Session需要解决的问题:
 	1. Session怎么存储值?
 	2. Session的运行生命周期?
+
+    SessionID 等价于 SessionStore实例 (加密与解密实现)
 */
 
 // Store包含具有特定ID的一个会话进程的所有数据.
@@ -140,13 +142,9 @@ func NewManager(provideName string, cf *ManagerConfig) (*Manager, error) {
 	}, nil
 }
 
-// getSid retrieves session identifier from HTTP Request.
-// First try to retrieve id by reading from cookie, session cookie name is configurable,
-// if not exist, then retrieve id from querying parameters.
-//
-// error is not nil when there is anything wrong.
-// sid is empty when need to generate a new session id
-// otherwise return an valid session id.
+// getSid 获取Session ID的过程
+// 首先, 尝试从Cookie当中获取SessionID
+// 如果获取的值为空或者发送错误, 则根据config从参数当中获取SessionID
 func (manager *Manager) getSid(r *http.Request) (string, error) {
 	cookie, errs := r.Cookie(manager.config.CookieName)
 	if errs != nil || cookie.Value == "" {
@@ -160,7 +158,7 @@ func (manager *Manager) getSid(r *http.Request) (string, error) {
 			sid = r.FormValue(manager.config.CookieName)
 		}
 
-		// if not found in Cookie / param, then read it from request headers
+		// 从Request的请求头获取SessionID
 		if manager.config.EnableSidInHTTPHeader && sid == "" {
 			sids, isFound := r.Header[manager.config.SessionNameInHTTPHeader]
 			if isFound && len(sids) != 0 {
@@ -171,12 +169,14 @@ func (manager *Manager) getSid(r *http.Request) (string, error) {
 		return sid, nil
 	}
 
-	// HTTP Request contains cookie for sessionid info.
+	// url.QueryEscape(s string) string  对s进行转码使之可以安全的用在URL查询里
+	// url.QueryUnescape(s string) (string, error)  用于将QueryEscape转码的字符串还原. 它会把%AB改为字节0xAB,
+	// 将'+'改为' '.
+	// 在cookie存储的时候会调用 QueryEscape()方法
 	return url.QueryUnescape(cookie.Value)
 }
 
-// SessionStart generate or read the session id from http request.
-// if session id exists, return SessionStore with this id.
+// SessionStart Session启动, 先从Request当中读取SessionID, 读取失败或者不存在,则生成一个SessionId
 func (manager *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (session Store, err error) {
 	sid, errs := manager.getSid(r)
 	if errs != nil {
@@ -187,13 +187,14 @@ func (manager *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (se
 		return manager.provider.SessionRead(sid)
 	}
 
-	// Generate a new session
+	// 生成SessionID
 	sid, errs = manager.sessionID()
 	if errs != nil {
 		return nil, errs
 	}
 
-	session, err = manager.provider.SessionRead(sid)
+	// 读取Session内容(一个Store), 验证能够获取到Session存储的结构
+	_, err = manager.provider.SessionRead(sid)
 	if err != nil {
 		return nil, err
 	}
@@ -209,12 +210,12 @@ func (manager *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (se
 		cookie.MaxAge = manager.config.CookieLifeTime
 		cookie.Expires = time.Now().Add(time.Duration(manager.config.CookieLifeTime) * time.Second)
 	}
-	if manager.config.EnableSetCookie {
+	if manager.config.EnableSetCookie { // 允许设置Cookie (Response)
 		http.SetCookie(w, cookie)
 	}
-	r.AddCookie(cookie)
+	r.AddCookie(cookie) // Request当中添加Cookie
 
-	if manager.config.EnableSidInHTTPHeader {
+	if manager.config.EnableSidInHTTPHeader { // 允许在Header当中设置Cookie
 		r.Header.Set(manager.config.SessionNameInHTTPHeader, sid)
 		w.Header().Set(manager.config.SessionNameInHTTPHeader, sid)
 	}
@@ -224,7 +225,7 @@ func (manager *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (se
 
 // SessionDestroy Destroy session by its id in http request cookie.
 func (manager *Manager) SessionDestroy(w http.ResponseWriter, r *http.Request) {
-	if manager.config.EnableSidInHTTPHeader {
+	if manager.config.EnableSidInHTTPHeader { // 清除Header当中的Cookie
 		r.Header.Del(manager.config.SessionNameInHTTPHeader)
 		w.Header().Del(manager.config.SessionNameInHTTPHeader)
 	}
@@ -235,42 +236,47 @@ func (manager *Manager) SessionDestroy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sid, _ := url.QueryUnescape(cookie.Value)
-	manager.provider.SessionDestroy(sid)
-	if manager.config.EnableSetCookie {
+	manager.provider.SessionDestroy(sid) // 删除Session的存储数据
+	if manager.config.EnableSetCookie { // 删除Response的Cookie(删除客户端的Cookie)
 		expiration := time.Now()
-		cookie = &http.Cookie{Name: manager.config.CookieName,
+		cookie = &http.Cookie{
+			Name: manager.config.CookieName,
 			Path:     "/",
 			HttpOnly: !manager.config.DisableHTTPOnly,
-			Expires:  expiration,
-			MaxAge:   -1}
+			Expires:  expiration, // 到期
+			MaxAge:   -1,  // 时间为负值
+		}
 
 		http.SetCookie(w, cookie)
 	}
 }
 
-// GetSessionStore Get SessionStore by its id.
+// GetSessionStore 获取Session的存储结构
 func (manager *Manager) GetSessionStore(sid string) (sessions Store, err error) {
 	sessions, err = manager.provider.SessionRead(sid)
 	return
 }
 
-// GC Start session gc process.
-// it can do gc in times after gc lifetime.
+// GC启动会话gc进程.
+// 它可以在gc生命周期后的时间内执行gc.
 func (manager *Manager) GC() {
 	manager.provider.SessionGC()
+	// 定时器, 每隔一定时间自调用一次
 	time.AfterFunc(time.Duration(manager.config.Gclifetime)*time.Second, func() { manager.GC() })
 }
 
-// SessionRegenerateID Regenerate a session id for this SessionStore who's id is saving in http request.
+// SessionRegenerateID 重新生成此会话ID的会话ID, 其id正在http请求中保存.
 func (manager *Manager) SessionRegenerateID(w http.ResponseWriter, r *http.Request) (session Store) {
 	sid, err := manager.sessionID()
 	if err != nil {
 		return
 	}
+	// func (r *Request) Cookie(name string) (*Cookie, error) 返回请求中名为name的Cookie,
+	// 如果未找到该Cookie会返回nil, ErrNoCookie
 	cookie, err := r.Cookie(manager.config.CookieName)
-	if err != nil || cookie.Value == "" {
+	if err != nil || cookie.Value == "" { // 请求当中没有cookie, 创建一个cookie
 		//delete old cookie
-		session, _ = manager.provider.SessionRead(sid)
+		session, _ = manager.provider.SessionRead(sid) //从Session当中获取Session的Store
 		cookie = &http.Cookie{Name: manager.config.CookieName,
 			Value:    url.QueryEscape(sid),
 			Path:     "/",
@@ -279,8 +285,11 @@ func (manager *Manager) SessionRegenerateID(w http.ResponseWriter, r *http.Reque
 			Domain:   manager.config.Domain,
 		}
 	} else {
-		oldsid, _ := url.QueryUnescape(cookie.Value)
-		session, _ = manager.provider.SessionRegenerate(oldsid, sid)
+		// 找到Cookie
+		oldsid, _ := url.QueryUnescape(cookie.Value) // 通过value查找SessionID
+		session, _ = manager.provider.SessionRegenerate(oldsid, sid) // 生成新的session
+
+		// 更新cookie的内容
 		cookie.Value = url.QueryEscape(sid)
 		cookie.HttpOnly = true
 		cookie.Path = "/"
@@ -302,7 +311,7 @@ func (manager *Manager) SessionRegenerateID(w http.ResponseWriter, r *http.Reque
 	return
 }
 
-// GetActiveSession Get all active sessions count number.
+// GetActiveSession 活跃的Session数量.
 func (manager *Manager) GetActiveSession() int {
 	return manager.provider.SessionAll()
 }
@@ -312,6 +321,7 @@ func (manager *Manager) SetSecure(secure bool) {
 	manager.config.Secure = secure
 }
 
+// 生成SessionID, 使用的是"crypto/rand"包的Read方法
 func (manager *Manager) sessionID() (string, error) {
 	b := make([]byte, manager.config.SessionIDLength)
 	n, err := rand.Read(b)
@@ -323,13 +333,13 @@ func (manager *Manager) sessionID() (string, error) {
 
 // Set cookie with https.
 func (manager *Manager) isSecure(req *http.Request) bool {
-	if !manager.config.Secure {
+	if !manager.config.Secure {// 先看配置Secure为 "", 0, false
 		return false
 	}
-	if req.URL.Scheme != "" {
+	if req.URL.Scheme != "" { // 看请求的Schema
 		return req.URL.Scheme == "https"
 	}
-	if req.TLS == nil {
+	if req.TLS == nil { // 看请求TLS设置
 		return false
 	}
 	return true
