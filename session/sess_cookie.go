@@ -10,6 +10,10 @@ import (
 )
 
 var cookiepder = &CookieProvider{}
+/**
+	核心内容: SessionID 等价于 SessionStore实例 (加密与解密实现)
+	获取任何一个都可以得到另外一个.
+*/
 
 // Cookie存储结构: 解决存储问题
 type CookieSessionStore struct {
@@ -41,7 +45,7 @@ func (st *CookieSessionStore) Delete(key interface{}) error {
 	return nil
 }
 
-// 清空存储
+// 清空存储, 直接将value重新赋值
 func (st *CookieSessionStore) Flush() error {
 	st.lock.Lock()
 	defer st.lock.Unlock()
@@ -49,7 +53,7 @@ func (st *CookieSessionStore) Flush() error {
 	return nil
 }
 
-// SessionID Return id of this cookie session
+// 获取SessionID
 func (st *CookieSessionStore) SessionID() string {
 	return st.sid
 }
@@ -78,7 +82,7 @@ type cookieConfig struct {
 	Maxage       int    `json:"maxage"`
 }
 
-// CookieProvider, 引擎, 解决生命周期问题
+// Cookie引擎, 解决生命周期问题
 type CookieProvider struct {
 	maxlifetime int64
 	config      *cookieConfig

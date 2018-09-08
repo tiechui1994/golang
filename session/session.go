@@ -27,8 +27,6 @@ import (
  Session需要解决的问题:
 	1. Session怎么存储值?
 	2. Session的运行生命周期?
-
-    SessionID 等价于 SessionStore实例 (加密与解密实现)
 */
 
 // Store包含具有特定ID的一个会话进程的所有数据.
