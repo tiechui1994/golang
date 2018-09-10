@@ -53,15 +53,15 @@ func (st *MemSessionStore) SessionID() string {
 	return st.sid
 }
 
-// SessionRelease, 不做任何处理
+// 内存存储Session内容, 会一直保存在内存当中, 不做释放操作
 func (st *MemSessionStore) SessionRelease(w http.ResponseWriter) {
 }
 
 // 内存引擎(配置只有一个, savePath)
 type MemProvider struct {
 	lock        sync.RWMutex             // locker
-	sessions    map[string]*list.Element // 使用 map + 双向链表存储所有的Session
-	list        *list.List               // for gc
+	sessions    map[string]*list.Element // map存储所有的SessionStore实例
+	list        *list.List               // 按照时间访问排序的SessionStore
 	maxlifetime int64
 	savePath    string
 }
@@ -138,7 +138,7 @@ func (pder *MemProvider) SessionDestroy(sid string) error {
 func (pder *MemProvider) SessionGC() {
 	pder.lock.RLock()
 	for {
-		element := pder.list.Back()
+		element := pder.list.Back() //获取最早访问的那个SessionStore
 		if element == nil {
 			break
 		}
@@ -161,7 +161,7 @@ func (pder *MemProvider) SessionAll() int {
 	return pder.list.Len()
 }
 
-// SessionUpdate expand time of session store by id in memory session
+// 更新当前SessionID的访问时间, 并将其移动到最前端
 func (pder *MemProvider) SessionUpdate(sid string) error {
 	pder.lock.Lock()
 	defer pder.lock.Unlock()

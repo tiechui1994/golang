@@ -9,6 +9,7 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"errors"
+	"container/list"
 	"crypto/aes"
 	"os"
 	"time"
@@ -92,10 +93,11 @@ func Encrypt(block cipher.Block, value []byte) ([]byte, error) {
 	// Return iv + ciphertext.
 	return append(iv, value...), nil
 }
-func main() {
+
+func cookieExample() {
 	var (
-		name = "cookie"
-		hashKey = "hash"
+		name     = "cookie"
+		hashKey  = "hash"
 		blockKey = generateRandomKey(16)
 	)
 	block, err := aes.NewCipher([]byte(blockKey))
@@ -113,9 +115,9 @@ func main() {
 	// gob流
 	bytes, _ := EncodeGob(origin)
 	// 加密
-	bytes, _ =  Encrypt(block, bytes)
+	bytes, _ = Encrypt(block, bytes)
 	// Base64编码
-	bytes  = Encode(bytes)
+	bytes = Encode(bytes)
 	// 唯一MAC
 	bytes = []byte(fmt.Sprintf("%s|%d|%s|", name, time.Now().UTC().Unix(), bytes))
 	h := hmac.New(sha1.New, []byte(hashKey))
@@ -125,4 +127,23 @@ func main() {
 	// Base64编码
 	bytes = Encode(bytes)
 	fmt.Println(string(bytes))
+}
+
+func List() {
+	var (
+		store = make(map[string]*list.Element)
+		l     = list.List{}
+	)
+
+	ele := &struct {
+		Name string
+	}{Name: "张三"}
+
+	element := l.PushFront(ele)
+	store["1"] = element
+
+	fmt.Printf("%+v", store)
+}
+func main() {
+	List()
 }
