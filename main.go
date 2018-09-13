@@ -1,13 +1,12 @@
 package main
 
 import (
-	"github.com/astaxie/beego/session"
 	"fmt"
 	"encoding/gob"
 	"bytes"
 	"encoding/base64"
 	"crypto/cipher"
-	"crypto/rand"
+	crand "crypto/rand"
 	"errors"
 	"container/list"
 	"crypto/aes"
@@ -15,27 +14,12 @@ import (
 	"time"
 	"crypto/hmac"
 	"crypto/sha1"
+	"sync"
 )
-
-// Session 测试
-func init() {
-	managerConfig := session.ManagerConfig{
-		CookieName:      "gosessionid",
-		EnableSetCookie: true,
-		Gclifetime:      3600,
-		Maxlifetime:     3600,
-		Secure:          false,
-		CookieLifeTime:  3600,
-		ProviderConfig:  "",
-	}
-	globalSessions, _ := session.NewManager("memory", &managerConfig)
-	fmt.Printf("%+v\n", globalSessions)
-	go globalSessions.GC()
-}
 
 func generateRandomKey(length int) (data []byte) {
 	data = make([]byte, length)
-	n, err := rand.Read(data)
+	n, err := crand.Read(data)
 	if n != length || err != nil {
 		return nil
 	}
@@ -144,6 +128,40 @@ func List() {
 
 	fmt.Printf("%+v", store)
 }
+
+type threadSafeSet struct {
+	sync.RWMutex
+	s []interface{}
+}
+
+func (set *threadSafeSet) Iter() <-chan interface{} {
+	ch := make(chan interface{}) // 同步处理, 处理的速度有限
+	//ch := make(chan interface{}, len(set.s)) // 异步处理, 处理的速度得到提升
+	go func() {
+		set.RLock()
+
+		for elem, value := range set.s {
+			ch <- value
+			fmt.Println("Iter:", elem, value)
+		}
+
+		close(ch)
+		set.RUnlock()
+
+	}()
+	return ch
+}
+
+func f() (string, error, string) {
+	return "test scope of variable", nil, ""
+}
+
 func main() {
-	List()
+	var name = "JAVA"
+	println(&name)
+	if name, err, _ := f(); nil == err {
+		println(&name)
+		println(name)
+	}
+	println(name)
 }
