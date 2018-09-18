@@ -113,8 +113,8 @@ func DeferAndScope() {
 	fmt.Println(f2(1))
 	fmt.Println(f3(1))
 	fmt.Println("==============================")
-	fmt.Printf("%+v\n", f4())
-	fmt.Printf("%+v\n", f5())
+	fmt.Println(f4())
+	fmt.Println(f5())
 }
 
 /*
