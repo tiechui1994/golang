@@ -35,11 +35,38 @@ func DeferInit() {
 		return ret
 	}
 
-	a := 1
-	b := 2
+	var (
+		a = 1
+		b = 2
+	)
 	defer calc("1", a, calc("10", a, b)) // 参数: a=1, calc(a=1, b=2)
 	a = 0
 	defer calc("2", a, calc("20", a, b)) // 参数: a=0, calc(a=0, b=2)
+	b = 1
+}
+
+/*
+defer 函数体:
+	在运行defer函数体的时机, 会顺序执行函数体的内容
+*/
+func DeferParam() {
+	calc := func(index string, a, b int) int {
+		ret := a + b
+		fmt.Println(index, a, b, ret)
+		return ret
+	}
+
+	var (
+		a = 1
+		b = 2
+	)
+	defer func() {
+		calc("1", a, calc("10", a, b)) // 参数: a=0, calc(a=0, b=1)
+	}()
+	a = 0
+	defer func() {
+		calc("2", a, calc("20", a, b)) // 参数: a=0, calc(a=0, b=1)
+	}()
 	b = 1
 }
 

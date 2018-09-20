@@ -1,6 +1,9 @@
 package details
 
-import "testing"
+import (
+	"testing"
+	"fmt"
+)
 
 func TestDeferExecute(t *testing.T) {
 	DeferExecute()
@@ -8,6 +11,8 @@ func TestDeferExecute(t *testing.T) {
 
 func TestDeferInit(t *testing.T) {
 	DeferInit()
+	fmt.Println("======================")
+	DeferParam()
 }
 
 func TestMapPointer(t *testing.T) {

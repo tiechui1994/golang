@@ -152,16 +152,6 @@ func (set *threadSafeSet) Iter() <-chan interface{} {
 	return ch
 }
 
-func f() (string, error, string) {
-	return "test scope of variable", nil, ""
-}
 
 func main() {
-	var name = "JAVA"
-	println(&name)
-	if name, err, _ := f(); nil == err {
-		println(&name)
-		println(name)
-	}
-	println(name)
 }
