@@ -5,22 +5,27 @@ import (
 	"runtime"
 	"sync/atomic"
 	. "sync"
-	"runtime/race"
 )
 
+/*
+典型的死锁检测:
+	exited: 退出的信号
+	wg1: 每个协程等待 wg2 的完成, 一旦完成,则发送一个退出信号
+	wg2: 测试 wg1 当中发出的退出信号
+*/
 func testWaitGroup(t *testing.T, wg1 *WaitGroup, wg2 *WaitGroup) {
 	n := 16
+	exited := make(chan bool, n)
 	wg1.Add(n)
 	wg2.Add(n)
-	exited := make(chan bool, n)
 	for i := 0; i != n; i++ {
 		go func() {
 			wg1.Done()
-			wg2.Wait()
+			wg2.Wait() // 阻塞,等待所有wg2的完成
 			exited <- true
 		}()
 	}
-	wg1.Wait()
+	wg1.Wait() // 阻塞,保证 wg1的所有协程已经开启
 	for i := 0; i != n; i++ {
 		select {
 		case <-exited:
@@ -34,6 +39,7 @@ func testWaitGroup(t *testing.T, wg1 *WaitGroup, wg2 *WaitGroup) {
 	}
 }
 
+// 死锁检查
 func TestWaitGroup(t *testing.T) {
 	wg1 := &WaitGroup{}
 	wg2 := &WaitGroup{}
@@ -45,11 +51,20 @@ func TestWaitGroup(t *testing.T) {
 }
 
 func knownRacy(t *testing.T) {
-	if race.Enabled {
+	var enabled bool
+	if enabled {
 		t.Skip("skipping known-racy test under the race detector")
 	}
 }
 
+/*
+测试wg使用不当:
+	wg.Add() 向wg当中添加协程, 纳入wg的管理
+	wg.Done() 协程工作完成,从wg当中移除. 当wg当中没有协程时候, 再调用此方法会抛出异常
+    wg.Wait() 等待wg所有协程的完成. 阻塞调用
+
+wg类似一个队列, Add() 向队列当中添加元素, Done()从队列当中移除元素, Wait()等待队列为空
+*/
 func TestWaitGroupMisuse(t *testing.T) {
 	defer func() {
 		err := recover()
@@ -60,7 +75,7 @@ func TestWaitGroupMisuse(t *testing.T) {
 	wg := &WaitGroup{}
 	wg.Add(1)
 	wg.Done()
-	wg.Done()
+	wg.Done() // 抛出异常
 	t.Fatal("Should panic")
 }
 
@@ -79,8 +94,7 @@ func TestWaitGroupMisuse2(t *testing.T) {
 	}()
 	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(4))
 	done := make(chan interface{}, 2)
-	// The detection is opportunistic, so we want it to panic
-	// at least in one run out of a million.
+	// 这种检测是随机的, 期待在一次运行l00万协程的状况下发生异常
 	for i := 0; i < 1e6; i++ {
 		var wg WaitGroup
 		var here uint32
