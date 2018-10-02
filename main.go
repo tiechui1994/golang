@@ -16,6 +16,7 @@ import (
 	"crypto/sha1"
 	"sync"
 	"runtime"
+	"unsafe"
 )
 
 func generateRandomKey(length int) (data []byte) {
@@ -170,4 +171,55 @@ func main() {
 		}(i)
 	}
 	wg.Wait()
+	x := []byte{1, 23, 4, 24}
+	fmt.Println(uintptr(unsafe.Pointer(&x)), 1024*1024*1024*4)
+	y := []byte{1, 4, 24}
+	fmt.Println(uintptr(unsafe.Pointer(&y)), 1024*1024*1024*4)
+	z := []byte{1, 23}
+	fmt.Println(uintptr(unsafe.Pointer(&z)), 1024*1024*1024*4)
+	p := new(int)
+	fmt.Println(uintptr(unsafe.Pointer(p))%8, 1024*1024*1024*4)
+}
+
+type W struct {
+	b byte
+	s string
+	i int32
+	j int64
+	o bool
+}
+
+func init() {
+	type Null struct{}
+	fmt.Println(
+		unsafe.Sizeof(""),
+		unsafe.Sizeof([]int{1, 2, 3, 45, 6, 6}),
+		unsafe.Sizeof([]string{}),
+		unsafe.Sizeof([]float64{}),
+		unsafe.Sizeof([]interface{}{}),
+		unsafe.Sizeof(map[string]interface{}{}),
+		unsafe.Sizeof(map[interface{}]interface{}{}),
+		unsafe.Sizeof(map[int64]int64{}),
+		unsafe.Sizeof(make(chan int64)),
+		unsafe.Sizeof(make(chan string)),
+		unsafe.Sizeof(make(chan uintptr)),
+		unsafe.Sizeof(int64(10)),
+		unsafe.Alignof(Null{}),
+		unsafe.Sizeof(Null{}),
+	)
+
+	var w = new(W)
+	fmt.Printf("Size=%d\n", unsafe.Sizeof(*w))
+	fmt.Printf("b=%d\n", unsafe.Alignof(w.b))
+	fmt.Printf("i=%d\n", unsafe.Alignof(w.i))
+	fmt.Printf("j=%d\n", unsafe.Alignof(w.j))
+	fmt.Printf("w=%d\n", unsafe.Alignof(w.o))
+
+	fmt.Println(
+		unsafe.Offsetof(w.b),
+		unsafe.Offsetof(w.s),
+		unsafe.Offsetof(w.i),
+		unsafe.Offsetof(w.j),
+		unsafe.Offsetof(w.o),
+	)
 }
