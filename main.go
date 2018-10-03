@@ -171,18 +171,16 @@ func main() {
 		}(i)
 	}
 	wg.Wait()
-	x := []byte{1, 23, 4, 24}
-	fmt.Println(uintptr(unsafe.Pointer(&x)), 1024*1024*1024*4)
-	y := []byte{1, 4, 24}
-	fmt.Println(uintptr(unsafe.Pointer(&y)), 1024*1024*1024*4)
-	z := []byte{1, 23}
-	fmt.Println(uintptr(unsafe.Pointer(&z)), 1024*1024*1024*4)
-	p := new(int)
-	fmt.Println(uintptr(unsafe.Pointer(p))%8, 1024*1024*1024*4)
+
+	fmt.Println(runtime.GOARCH, runtime.GOOS)
+}
+
+type Null struct {
 }
 
 type W struct {
 	b byte
+	n Null
 	s string
 	i int32
 	j int64
@@ -213,10 +211,11 @@ func init() {
 	fmt.Printf("b=%d\n", unsafe.Alignof(w.b))
 	fmt.Printf("i=%d\n", unsafe.Alignof(w.i))
 	fmt.Printf("j=%d\n", unsafe.Alignof(w.j))
-	fmt.Printf("w=%d\n", unsafe.Alignof(w.o))
+	fmt.Printf("n=%d, %d\n", unsafe.Alignof(w.n), unsafe.Sizeof(w.n))
 
 	fmt.Println(
 		unsafe.Offsetof(w.b),
+		unsafe.Offsetof(w.n),
 		unsafe.Offsetof(w.s),
 		unsafe.Offsetof(w.i),
 		unsafe.Offsetof(w.j),
