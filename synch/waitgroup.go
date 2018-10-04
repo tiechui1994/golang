@@ -39,8 +39,8 @@ unsafe包的方法说明:
 */
 type WaitGroup struct {
 	// 8+4策略
-	// 在64位机器上, 高8*8位作为计数器, 低4*8位作为goroutine的等待计数
-	// 在32位机器上, 中4*8位作为计数器, 低4*8位作为goroutine的等待计数. (高4位空置)
+	// 在64位机器上, 高8*8位作为计数器, 低4*8位作为goroutine的等待数
+	// 在32位机器上, 中4*8位作为计数器, 低4*8位作为goroutine的等待数. (高4位空置)
 	// 在64位机器上, slice的对齐为8, 在32位机器上slice对齐应该为4
 	state1 [12]byte
 	sema   uint32
@@ -64,58 +64,70 @@ func (wg *WaitGroup) state() *uint64 {
 	}
 }
 
+/*
+ 1.	在计数器为零时发生的具有正增量的调用必须在 Wait() 之前发生. 具有负增量的调用
+	或具有在计数器大于零时开始的正增量的调用可以在任何时间发生.
+
+ 2.	通常这意味着对 Add() 的调用应该在 "创建goroutine或其他等待事件" 的语句之前执行.
+	如果重新使用WaitGroup等待几个独立的事件集, 则必须在返回所有先前的 Wait 调用之后发生新的Add调用.
+*/
 func (wg *WaitGroup) Add(delta int) {
 	// 获取的是指针的位置
 	statep := wg.state()
 
-	// 操作指针对应的值. state是指针指向的新值()
+	// 操作指针对应的值. state是指针指向的新值
 	state := atomic.AddUint64(statep, uint64(delta)<<32)
-	v := int32(state >> 32) // 高32位对应的值(计数值, 指用来统计goroutine当前数量的值)
-	w := uint32(state)      // 低32位对应的值(等待计数)
+	v := int32(state >> 32) // 高32位对应的值(计数器)
+	w := uint32(state)      // 低32位对应的值(等待数)
 
 	if v < 0 {
 		panic("sync: negative WaitGroup counter")
 	}
 
-	// w != 0, 当前的等待计数大于0
+	// w != 0,  等待数 > 0
 	// delta > 0, 添加新的goroutine
-	// v == int32(delta), 计数器
+	// v == int32(delta), 计数器 == delta
 	if w != 0 && delta > 0 && v == int32(delta) {
 		panic("sync: WaitGroup misuse: Add called concurrently with Wait")
 	}
+
 	if v > 0 || w == 0 {
 		return
 	}
 
-	// 当等待计数器 > 0 时,而goroutine设置为0
-	// 此时不可能有同时发生的状态突变:
-	// - 增加不能与等待同时发生
-	// - 如果计数器counter == 0, 不再增加等待计数器
+	// 当等待数 > 0 (w > 0) 时,而计数器为0 (v = 0)
+	// 此时不可能同时发生的状态突变:
+	// - Add()不能与Wait()同时发生
+	// - 如果计数器为0, 不再增加等待数
 	if *statep != state {
 		panic("sync: WaitGroup misuse: Add called concurrently with Wait")
 	}
+
 	// Reset waiters count to 0.
 	*statep = 0
 	for ; w != 0; w-- {
 		// 目的是一个简单的wakeup原语, 以供同步使用. true为唤醒排在等待队列的第一个goroutine
-		//runtime_Semrelease(&wg.sema, false)
+		// runtime_Semrelease(&wg.sema, false)
 	}
 }
 
 func (wg *WaitGroup) Wait() {
 	statep := wg.state()
+
 	// csa算法
 	for {
 		state := atomic.LoadUint64(statep) // 加载statep指针指向的值
-		v := int32(state >> 32) // 计数器的值
-		//w := uint32(state) // 等待计数的值
+		v := int32(state >> 32)            // 计数器的值
+		// w := uint32(state)              // 等待数的值
+
 		if v == 0 {
 			return
 		}
+
 		// 增加等待的goroutine数量, 对低32为数加1
 		if atomic.CompareAndSwapUint64(statep, state, state+1) {
 			// 目的是一个简单的sleep原语, 以供同步使用
-			//runtime_Semacquire(&wg.sema)
+			// runtime_Semacquire(&wg.sema)
 			if *statep != 0 {
 				panic("sync: WaitGroup is reused before previous Wait has returned")
 			}

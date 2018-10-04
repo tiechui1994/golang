@@ -93,6 +93,8 @@ func TestWaitGroupMisuse2(t *testing.T) {
 	//}
 	defer func() {
 		err := recover()
+		_, file, line, _ := runtime.Caller(3)
+		fmt.Println(file, line)
 		fmt.Println(err)
 		if err != "sync: negative WaitGroup counter" &&
 			err != "sync: WaitGroup misuse: Add called concurrently with Wait" &&
@@ -102,6 +104,7 @@ func TestWaitGroupMisuse2(t *testing.T) {
 	}()
 	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(4))
 	done := make(chan interface{}, 2) // 信号
+
 	// 这种检测是带有机会性的, 期待在一次运行l00万协程的状况下发生异常
 	for i := 0; i < 1e6; i++ {
 		var wg sync.WaitGroup
@@ -133,6 +136,7 @@ func TestWaitGroupMisuse2(t *testing.T) {
 			// spin
 		}
 		wg.Done() // (3)
+
 		for j := 0; j < 2; j++ {
 			if err := <-done; err != nil {
 				panic(err)
@@ -142,6 +146,10 @@ func TestWaitGroupMisuse2(t *testing.T) {
 	t.Fatal("Should panic")
 }
 
+/*
+wg使用不当:
+   	WaitGroup在 "previous Wait()返回之前" 被重用, (1), (2), (3)之间Wait()关系
+*/
 func TestWaitGroupMisuse3(t *testing.T) {
 	knownRacy(t)
 	if runtime.NumCPU() <= 1 {
@@ -149,6 +157,7 @@ func TestWaitGroupMisuse3(t *testing.T) {
 	}
 	defer func() {
 		err := recover()
+		fmt.Println(err)
 		if err != "sync: negative WaitGroup counter" &&
 			err != "sync: WaitGroup misuse: Add called concurrently with Wait" &&
 			err != "sync: WaitGroup is reused before previous Wait has returned" {
@@ -157,30 +166,35 @@ func TestWaitGroupMisuse3(t *testing.T) {
 	}()
 	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(4))
 	done := make(chan interface{}, 2)
-	// The detection is opportunistically, so we want it to panic
-	// at least in one run out of a million.
-	for i := 0; i < 1e6; i++ {
+
+	// 这种检测是带有机会性的, 期待在一次运行l00万协程的状况下发生异常
+	for i := 0; i < 1; i++ {
 		var wg sync.WaitGroup
 		wg.Add(1)
+
 		go func() {
 			defer func() {
 				done <- recover()
 			}()
 			wg.Done()
 		}()
+
 		go func() {
 			defer func() {
 				done <- recover()
 			}()
-			wg.Wait()
-			// Start reusing the wg before waiting for the Wait below to return.
+			wg.Wait() // (1) previous Wait() 是 (3)
+
+			// 重用wg
 			wg.Add(1)
 			go func() {
 				wg.Done()
 			}()
-			wg.Wait()
+			wg.Wait() // (2) previous Wait() 是 (1)
 		}()
-		wg.Wait()
+
+		wg.Wait() // (3)
+
 		for j := 0; j < 2; j++ {
 			if err := <-done; err != nil {
 				panic(err)
@@ -188,44 +202,6 @@ func TestWaitGroupMisuse3(t *testing.T) {
 		}
 	}
 	t.Fatal("Should panic")
-}
-
-func TestWaitGroupRace(t *testing.T) {
-	// Run this test for about 1ms.
-	for i := 0; i < 1000; i++ {
-		wg := &sync.WaitGroup{}
-		n := new(int32)
-		// spawn goroutine 1
-		wg.Add(1)
-		go func() {
-			atomic.AddInt32(n, 1)
-			wg.Done()
-		}()
-		// spawn goroutine 2
-		wg.Add(1)
-		go func() {
-			atomic.AddInt32(n, 1)
-			wg.Done()
-		}()
-		// Wait for goroutine 1 and 2
-		wg.Wait()
-		if atomic.LoadInt32(n) != 2 {
-			t.Fatal("Spurious wakeup from Wait")
-		}
-	}
-}
-
-func TestWaitGroupAlign(t *testing.T) {
-	type X struct {
-		x  byte
-		wg sync.WaitGroup
-	}
-	var x X
-	x.wg.Add(1)
-	go func(x *X) {
-		x.wg.Done()
-	}(&x)
-	x.wg.Wait()
 }
 
 func BenchmarkWaitGroupUncontended(b *testing.B) {
@@ -243,6 +219,7 @@ func BenchmarkWaitGroupUncontended(b *testing.B) {
 	})
 }
 
+// 压测: Add() 与 Done(), 使用一个wg
 func benchmarkWaitGroupAddDone(b *testing.B, localWork int) {
 	var wg sync.WaitGroup
 	b.RunParallel(func(pb *testing.PB) {
@@ -267,6 +244,7 @@ func BenchmarkWaitGroupAddDoneWork(b *testing.B) {
 	benchmarkWaitGroupAddDone(b, 100)
 }
 
+// 压测: Wait(), 使用一个wg
 func benchmarkWaitGroupWait(b *testing.B, localWork int) {
 	var wg sync.WaitGroup
 	b.RunParallel(func(pb *testing.PB) {
@@ -290,6 +268,7 @@ func BenchmarkWaitGroupWaitWork(b *testing.B) {
 	benchmarkWaitGroupWait(b, 100)
 }
 
+// 压测: 真实状况下的 Add() -> Done() -> Wait()
 func BenchmarkWaitGroupActuallyWait(b *testing.B) {
 	b.ReportAllocs()
 	b.RunParallel(func(pb *testing.PB) {
