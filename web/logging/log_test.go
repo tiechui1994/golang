@@ -19,3 +19,18 @@ func TestLogging(t *testing.T) {
 		log.Debug("%d", rand.Int())
 	}
 }
+
+func TestSmTP(t *testing.T) {
+	log := GetBeeLogger()
+	var config = `{
+					"username":"beego.log",
+					"password":"",
+					"host":"",
+					"sendTos":[""]
+                  }`
+
+	log.SetLogger(AdapterMail, config)
+	for i := 0; i < 1000; i++ {
+		log.Debug("%d", rand.Int())
+	}
+}
