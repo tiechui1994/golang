@@ -15,6 +15,7 @@ func newLogWriter(wr io.Writer) *logWriter {
 	return &logWriter{writer: wr}
 }
 
+// 写入消息, 不同的Writer导致消息写入不同的渠道
 func (lg *logWriter) println(when time.Time, msg string) {
 	lg.Lock()
 	h, _, _ := formatTimeHeader(when)

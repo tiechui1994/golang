@@ -7,10 +7,9 @@ import (
 	"time"
 )
 
-// brush is a color join function
 type brush func(string) string
 
-// newBrush return a fix color Brush
+// 设置输出日志的颜色, "\033[1;xxm" + msg + "\033[0m"
 func newBrush(color string) brush {
 	pre := "\033["
 	reset := "\033[0m"
@@ -19,6 +18,7 @@ func newBrush(color string) brush {
 	}
 }
 
+// 颜色数组
 var colors = []brush{
 	newBrush("1;37"), // Emergency          white
 	newBrush("1;36"), // Alert              cyan
@@ -30,24 +30,24 @@ var colors = []brush{
 	newBrush("1;44"), // Debug              Background blue
 }
 
-// consoleWriter implements LoggerInterface and writes messages to terminal.
+// 核心是控制终端的颜色显示
+// 实现了Logger, 即Console引擎(终端日志)
 type consoleWriter struct {
 	lg       *logWriter
 	Level    int  `json:"level"`
-	Colorful bool `json:"color"` //this filed is useful only when system's terminal supports color
+	Colorful bool `json:"color"` // 仅当系统终端支持颜色时, 此字段才有用
 }
 
-// NewConsole create ConsoleWriter returning as LoggerInterface.
 func NewConsole() Logger {
 	cw := &consoleWriter{
-		lg:       newLogWriter(os.Stdout),
+		lg:       newLogWriter(os.Stdout), // 将标准输出作为Writer
 		Level:    LevelDebug,
-		Colorful: runtime.GOOS != "windows",
+		Colorful: runtime.GOOS != "windows", // 颜色控制
 	}
 	return cw
 }
 
-// Init init console logger.
+// 初始化, 设置参数(2个)
 // jsonConfig like '{"level":LevelTrace}'.
 func (c *consoleWriter) Init(jsonConfig string) error {
 	if len(jsonConfig) == 0 {
@@ -60,24 +60,25 @@ func (c *consoleWriter) Init(jsonConfig string) error {
 	return err
 }
 
-// WriteMsg write message in console.
+// 写消息:
 func (c *consoleWriter) WriteMsg(when time.Time, msg string, level int) error {
 	if level > c.Level {
 		return nil
 	}
+
+	// 颜色控制
 	if c.Colorful {
 		msg = colors[level](msg)
 	}
+
 	c.lg.println(when, msg)
 	return nil
 }
 
-// Destroy implementing method. empty.
 func (c *consoleWriter) Destroy() {
 
 }
 
-// Flush implementing method. empty.
 func (c *consoleWriter) Flush() {
 
 }

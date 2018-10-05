@@ -29,7 +29,7 @@ import (
 //
 
 const (
-	LevelEmergency = iota
+	LevelEmergency     = iota
 	LevelAlert
 	LevelCritical
 	LevelError
@@ -205,7 +205,7 @@ func (bl *BeeLogger) startLogger() {
 	}
 }
 
-// 增加Adapter
+// 设置Logger引擎, 第一次设置的时候, 将清空outputs, 并添加设置的值
 func (bl *BeeLogger) SetLogger(adapterName string, configs ...string) error {
 	bl.lock.Lock()
 	defer bl.lock.Unlock()
@@ -271,15 +271,16 @@ func (bl *BeeLogger) writeToLoggers(when time.Time, msg string, level int) {
 	}
 }
 
-// 写入:
+// 写入: 写入一条数据, 该数据是紧急的
 func (bl *BeeLogger) Write(p []byte) (n int, err error) {
 	if len(p) == 0 {
 		return 0, nil
 	}
 	// 写入日志总是在末尾添加'\n', 因此需要去掉末尾的'\n'
 	if p[len(p)-1] == '\n' {
-		p = p[0 : len(p)-1]
+		p = p[0: len(p)-1]
 	}
+
 	// set levelLoggerImpl to ensure all log message will be write out
 	err = bl.writeMsg(levelLoggerImpl, string(p))
 	if err == nil {
@@ -291,7 +292,7 @@ func (bl *BeeLogger) Write(p []byte) (n int, err error) {
 // 写入日志:
 // 		logLevel是日志级别, msg是日志格式(v是日志对应格式内容)/日志内容
 func (bl *BeeLogger) writeMsg(logLevel int, msg string, v ...interface{}) error {
-	// 什么情况?
+	// 解决init的加载问题, 因为第一次创建Log的时候init()没有初始化, 导致AdapterConsole没有初始化
 	if !bl.init {
 		bl.lock.Lock()
 		bl.setLogger(AdapterConsole)
@@ -509,10 +510,9 @@ func (bl *BeeLogger) flush() {
 
 //--------------------------------------------------------------------------------------------------------------------
 
-// 初始化一个日志对象
+// 初始化一个日志对象, 此时logging模块的init()方法还没有初始化
 var beeLogger = NewLogger()
 
-// GetBeeLogger returns the default BeeLogger
 func GetBeeLogger() *BeeLogger {
 	return beeLogger
 }
@@ -524,7 +524,6 @@ var beeLoggerMap = struct {
 	logs: map[string]*log.Logger{},
 }
 
-// GetLogger returns the default BeeLogger
 func GetLogger(prefixes ...string) *log.Logger {
 	prefix := append(prefixes, "")[0]
 	if prefix != "" {
