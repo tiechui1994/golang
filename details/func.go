@@ -145,9 +145,12 @@ func DeferAndScope() {
 }
 
 /*
-作用域:
-	1.
-	2.
+golang 作用域:
+	全局作用域: 所有的关键字和内置类型, 内置函数都拥有全局作用域
+	package作用域: 一个包中声明的变量, 常量, 函数, 类型等都拥有包作用域, 在同一个包中可以任意访问
+	文件作用域: 一个文件中通过import导入的包名, 只在当前文件有效
+	函数作用域以及for, if, {}自定义作用域: 函数的参数, 命名函数返回值, 返回值都拥有函数作用域, for,
+	if, {}内部的变量只拥有最小作用域.
 */
 func Scope() {
 	var ErrDidNotWork = errors.New("did not work")
@@ -189,29 +192,6 @@ func EqualStruct() {
 	b2 := new(map[string]string)
 	if a2 == b2 {
 		println("===")
-	}
-}
-
-// For循环当中, 循环变量只会创建一次, 后面的更新是指针方式的更新. 千万不要操作循环变量的指针
-func ForRange() {
-	// 只会创建一次
-	loops := []int{1, 2}
-	for i, v := range loops {
-		fmt.Printf("%+v, %+v\n", &i, &v)
-	}
-
-	fmt.Println("====================")
-
-	mp := map[string]string{"A": "1", "B": "2"}
-	for i, v := range mp {
-		fmt.Printf("%+v, %+v\n", &i, &v)
-	}
-
-	fmt.Println("====================")
-
-	ints := []*int{new(int), new(int)}
-	for i, v := range ints {
-		fmt.Printf("%+v, %+v\n", &i, &v)
 	}
 }
 
