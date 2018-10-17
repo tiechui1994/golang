@@ -4,7 +4,7 @@ import (
 	"sync/atomic"
 	)
 
-/**
+/*
 并发控制的模式:
 	方式一: 使用channel
 	方式二: 使用WaitGroup

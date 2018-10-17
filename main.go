@@ -15,8 +15,8 @@ import (
 	"crypto/hmac"
 	"crypto/sha1"
 	"sync"
-	"runtime"
 	"unsafe"
+	"reflect"
 )
 
 func generateRandomKey(length int) (data []byte) {
@@ -155,24 +155,6 @@ func (set *threadSafeSet) Iter() <-chan interface{} {
 }
 
 func main() {
-	runtime.GOMAXPROCS(1)
-	wg := sync.WaitGroup{}
-	wg.Add(10)
-	for i := 0; i < 10; i++ {
-		go func() {
-			fmt.Println("i: ", i)
-			wg.Done()
-		}()
-	}
-	for i := 0; i < 10; i++ {
-		go func(i int) {
-			fmt.Println("i: ", i)
-			wg.Done()
-		}(i)
-	}
-	wg.Wait()
-
-	fmt.Println(runtime.GOARCH, runtime.GOOS)
 }
 
 type Null struct {
@@ -188,6 +170,7 @@ type W struct {
 }
 
 func init() {
+	return
 	type Null struct{}
 	fmt.Println(
 		unsafe.Sizeof(""),
