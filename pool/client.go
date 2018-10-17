@@ -15,8 +15,8 @@ const (
 // 默认的Pool
 var defaultPool, _ = NewPool(DefaultPoolSize)
 
-func Submit(task *Job, args ...interface{}) error {
-	return defaultPool.Submit(task, args)
+func Submit(task *job) error {
+	return defaultPool.Submit(task)
 }
 
 func Running() int {
@@ -39,4 +39,6 @@ var (
 	ErrInvalidPoolSize   = errors.New("invalid size for pool")
 	ErrInvalidPoolExpiry = errors.New("invalid expiry for pool")
 	ErrPoolClosed        = errors.New("this pool has been closed")
+	ErrFunction          = errors.New("function type is invalid")
+	ErrFunctionArgs      = errors.New("function args is invalid")
 )

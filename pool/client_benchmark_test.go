@@ -14,7 +14,7 @@ const (
 	benchPoolSize = 100000
 )
 
-func demoFunc(args ...interface{}) error {
+func demoFunc() error {
 	n := 10
 	time.Sleep(time.Duration(n) * time.Millisecond)
 	return nil
@@ -66,18 +66,15 @@ func BenchmarkSemaphoreWithFunc(b *testing.B) {
 
 func BenchmarkPoolWithFunc(b *testing.B) {
 	var wg sync.WaitGroup
-	p, _ := pool.NewPoolWithFunc(benchPoolSize, func(i interface{}) error {
-		demoPoolFunc(i)
-		wg.Done()
-		return nil
-	})
-	defer p.Release()
+	p, _ := pool.NewPool(benchPoolSize)
+	defer p.Close()
 
 	b.StartTimer()
+	job, _ := pool.NewJob(demoPoolFunc, benchParam)
 	for i := 0; i < b.N; i++ {
 		wg.Add(RunTimes)
 		for j := 0; j < RunTimes; j++ {
-			p.Serve(benchParam)
+			p.Submit(job)
 		}
 		wg.Wait()
 		//b.Logf("running goroutines: %d", p.Running())
@@ -107,12 +104,13 @@ func BenchmarkSemaphore(b *testing.B) {
 }
 
 func BenchmarkPool(b *testing.B) {
-	p, _ := pool.NewPoolWithFunc(benchPoolSize, demoPoolFunc)
-	defer p.Release()
+	p, _ := pool.NewPool(benchPoolSize)
+	defer p.Close()
 	b.StartTimer()
+	job, _ := pool.NewJob(demoPoolFunc, benchParam)
 	for i := 0; i < b.N; i++ {
 		for j := 0; j < RunTimes; j++ {
-			p.Serve(benchParam)
+			p.Submit(job)
 		}
 	}
 	b.StopTimer()

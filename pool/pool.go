@@ -83,7 +83,7 @@ func NewTimingPool(capacity, expiry int) (*Pool, error) {
 //-------------------------------------------------------------------------
 
 // 提交任务
-func (p *Pool) Submit(job *Job, args ...interface{}) error {
+func (p *Pool) Submit(job *job) error {
 	if len(p.signal) > 0 {
 		return ErrPoolClosed
 	}
@@ -181,7 +181,7 @@ func (p *Pool) getWorker() *Worker {
 	} else if w == nil { // 创建一个新的Worker
 		w = &Worker{
 			pool: p,
-			job:  make(chan *Job, 1),
+			job:  make(chan *job, 1),
 		}
 		w.run()
 		p.incRunning()

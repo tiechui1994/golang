@@ -5,6 +5,7 @@ import (
 	"sync"
 	"testing"
 	"golang/pool"
+	"time"
 )
 
 const (
@@ -50,7 +51,7 @@ func TestPool(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := 0; i < n; i++ {
 		wg.Add(1)
-		job := pool.NewJob(
+		job, _ := pool.NewJob(
 			func() error {
 				demoFunc()
 				wg.Done()
@@ -71,40 +72,37 @@ func TestPool(t *testing.T) {
 	t.Logf("memory usage:%d MB", curMem)
 }
 
-//func TestCodeCov(t *testing.T) {
-//	_, err := pool.NewTimingPool(-1, -1)
-//	t.Log(err)
-//	_, err = pool.NewTimingPool(1, -1)
-//	t.Log(err)
-//	_, err = pool.NewTimingPoolWithFunc(-1, -1, demoPoolFunc)
-//	t.Log(err)
-//	_, err = pool.NewTimingPoolWithFunc(1, -1, demoPoolFunc)
-//	t.Log(err)
-//
-//	p0, _ := pool.NewPool(PoolSize)
-//	defer p0.Submit(demoFunc)
-//	defer p0.Close()
-//	for i := 0; i < n; i++ {
-//		p0.Submit(demoFunc)
-//	}
-//	t.Logf("pool, capacity:%d", p0.Cap())
-//	t.Logf("pool, running workers number:%d", p0.Running())
-//	t.Logf("pool, free workers number:%d", p0.Idle())
-//	p0.ResetCap(PoolSize)
-//	p0.ResetCap(PoolSize / 2)
-//	t.Logf("pool, after resize, capacity:%d, running:%d", p0.Cap(), p0.Running())
-//
-//	p, _ := pool.NewPool(TestSize)
-//	defer p.Serve(Param)
-//	defer p.Release()
-//	for i := 0; i < n; i++ {
-//		p.Serve(Param)
-//	}
-//	time.Sleep(pool.DefaultCleanInterval * time.Second)
-//	t.Logf("pool with func, capacity:%d", p.Cap())
-//	t.Logf("pool with func, running workers number:%d", p.Running())
-//	t.Logf("pool with func, free workers number:%d", p.Free())
-//	p.ReSize(TestSize)
-//	p.ReSize(PoolSize)
-//	t.Logf("pool with func, after resize, capacity:%d, running:%d", p.Cap(), p.Running())
-//}
+func TestCodeCov(t *testing.T) {
+	_, err := pool.NewTimingPool(-1, -1)
+	t.Log(err)
+	_, err = pool.NewTimingPool(1, -1)
+	t.Log(err)
+
+	job, _ := pool.NewJob(demoFunc)
+	p0, _ := pool.NewPool(PoolSize)
+	defer p0.Submit(job)
+	defer p0.Close()
+	for i := 0; i < n; i++ {
+		p0.Submit(job)
+	}
+	t.Logf("pool, capacity:%d", p0.Cap())
+	t.Logf("pool, running workers number:%d", p0.Running())
+	t.Logf("pool, free workers number:%d", p0.Idle())
+	p0.ResetCap(PoolSize)
+	p0.ResetCap(PoolSize / 2)
+	t.Logf("pool, after resize, capacity:%d, running:%d", p0.Cap(), p0.Running())
+
+	p, _ := pool.NewPool(TestSize)
+	defer p.Submit(job)
+	defer p.Close()
+	for i := 0; i < n; i++ {
+		p.Submit(job)
+	}
+	time.Sleep(pool.DefaultCleanInterval * time.Second)
+	t.Logf("pool with func, capacity:%d", p.Cap())
+	t.Logf("pool with func, running workers number:%d", p.Running())
+	t.Logf("pool with func, free workers number:%d", p.Idle())
+	p.ResetCap(TestSize)
+	p.ResetCap(PoolSize)
+	t.Logf("pool with func, after resize, capacity:%d, running:%d", p.Cap(), p.Running())
+}

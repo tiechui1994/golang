@@ -5,12 +5,12 @@ import (
 	"reflect"
 )
 
-type Job struct {
+type job struct {
 	function interface{}
 	args     []interface{}
 }
 
-func NewJob(function interface{}, args ...interface{}) *Job {
+func NewJob(function interface{}, args ...interface{}) (*job, error) {
 	var (
 		val = reflect.ValueOf(function)
 		typ = reflect.TypeOf(function)
@@ -21,20 +21,20 @@ func NewJob(function interface{}, args ...interface{}) *Job {
 	}
 
 	if val.Kind() != reflect.Func {
-		panic("function type is invalid")
+		return nil, ErrFunction
 	}
 
 	if typ.NumIn() != len(args) {
-		panic("function params is invalid")
+		return nil, ErrFunctionArgs
 	}
 
-	return &Job{
+	return &job{
 		function: val.Interface(),
 		args:     args,
-	}
+	}, nil
 }
 
-func (f *Job) Execute() {
+func (f *job) Execute() {
 	fun := reflect.ValueOf(f.function)
 	args := make([]reflect.Value, len(f.args))
 
@@ -48,7 +48,7 @@ func (f *Job) Execute() {
 type Worker struct {
 	pool *Pool
 
-	job chan *Job
+	job chan *job
 
 	recycleTime time.Time // 在将空闲的worker放回到空闲列表当中, recycleTime更新为当前的时间
 }
