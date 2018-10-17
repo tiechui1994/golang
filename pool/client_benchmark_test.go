@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"golang/goroutines/pool"
+	"golang/pool"
 )
 
 const (

@@ -4,7 +4,7 @@ import (
 	"runtime"
 	"sync"
 	"testing"
-	"golang/goroutines/pool"
+	"golang/pool"
 )
 
 const (
