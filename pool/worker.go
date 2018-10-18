@@ -56,7 +56,7 @@ type Worker struct {
 func (w *Worker) run() {
 	go func() {
 		for f := range w.job {
-			if f == nil {
+			if f == nil { // 协程退出, 超过空闲事件会执行
 				w.pool.decRunning()
 				return
 			}
