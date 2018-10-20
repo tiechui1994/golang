@@ -14,36 +14,46 @@ import (
 	"sync"
 )
 
+/**
+IniConfig 和 IniConfigContainer 是孪生兄弟,
+IniConfig 负责解析ini文件
+IniConfigContainer 负责存储解析后的结果
+*/
+
 var (
-	defaultSection = "default"   // default section means if some ini items not in a section, make them in default section,
-	bNumComment    = []byte{'#'} // number signal
-	bSemComment    = []byte{';'} // semicolon signal
-	bEmpty         = []byte{}
-	bEqual         = []byte{'='} // equal signal
-	bDQuote        = []byte{'"'} // quote signal
-	sectionStart   = []byte{'['} // section start signal
-	sectionEnd     = []byte{']'} // section end signal
-	lineBreak      = "\n"
+	defaultSection = "default" // 默认的section, 即ini文件当中的项没有指定section, 则归结到[default]当中
+
+	bNumComment = []byte{'#'} // 注释开始符号
+	bSemComment = []byte{';'} // 注释开始符号
+	bEmpty      = []byte{}
+	bEqual      = []byte{'='}
+	bDQuote     = []byte{'"'}
+
+	sectionStart = []byte{'['} // section 开始标志
+	sectionEnd   = []byte{']'} // section 结束标志
+
+	lineBreak = "\n"
 )
 
-// IniConfig implements Config to parse ini file.
+// 实现了Config接口, 专门解析ini文件
 type IniConfig struct {
 }
 
-// Parse creates a new Config and parses the file configuration from the named file.
-func (ini *IniConfig) Parse(name string) (Configer, error) {
-	return ini.parseFile(name)
+// 返回的是 Configer, 即ini文件对应在内存当中的存储结构, IniConfigContainer
+func (ini *IniConfig) Parse(filePath string) (Configer, error) {
+	return ini.parseFile(filePath)
 }
 
-func (ini *IniConfig) parseFile(name string) (*IniConfigContainer, error) {
-	data, err := ioutil.ReadFile(name)
+func (ini *IniConfig) parseFile(filePath string) (*IniConfigContainer, error) {
+	data, err := ioutil.ReadFile(filePath)
 	if err != nil {
 		return nil, err
 	}
 
-	return ini.parseData(filepath.Dir(name), data)
+	return ini.parseData(filepath.Dir(filePath), data)
 }
 
+// IniConfig 核心, 解析数据
 func (ini *IniConfig) parseData(dir string, data []byte) (*IniConfigContainer, error) {
 	cfg := &IniConfigContainer{
 		data:           make(map[string]map[string]string),
@@ -55,72 +65,81 @@ func (ini *IniConfig) parseData(dir string, data []byte) (*IniConfigContainer, e
 	defer cfg.Unlock()
 
 	var comment bytes.Buffer
-	buf := bufio.NewReader(bytes.NewBuffer(data))
-	// check the BOM
+	buf := bufio.NewReader(bytes.NewBuffer(data)) // 构建一个BufferReader, 方便行读取
+
+	// 检查ini文件的BOM头
 	head, err := buf.Peek(3)
 	if err == nil && head[0] == 239 && head[1] == 187 && head[2] == 191 {
 		for i := 1; i <= 3; i++ {
 			buf.ReadByte()
 		}
 	}
+
 	section := defaultSection
 	for {
 		line, _, err := buf.ReadLine()
+
+		// 行末
 		if err == io.EOF {
 			break
 		}
-		//It might be a good idea to throw a error on all unknonw errors?
+
+		// 其他未知错误
 		if _, ok := err.(*os.PathError); ok {
 			return nil, err
 		}
+
+		// 开始解析,
+		// 第1步: 去空格, 判断是否为空行
 		line = bytes.TrimSpace(line)
 		if bytes.Equal(line, bEmpty) {
 			continue
 		}
+
+		// 第2步: 注释行, 只会保存注释内容
 		var bComment []byte
 		switch {
-		case bytes.HasPrefix(line, bNumComment):
+		case bytes.HasPrefix(line, bNumComment): // #
 			bComment = bNumComment
-		case bytes.HasPrefix(line, bSemComment):
+		case bytes.HasPrefix(line, bSemComment): // ;
 			bComment = bSemComment
 		}
 		if bComment != nil {
-			line = bytes.TrimLeft(line, string(bComment))
-			// Need append to a new line if multi-line comments.
-			if comment.Len() > 0 {
+			line = bytes.TrimLeft(line, string(bComment)) // 只是保存注释内容
+			if comment.Len() > 0 { // 多行注释情况,需要手动添加换行符
 				comment.WriteByte('\n')
 			}
 			comment.Write(line)
 			continue
 		}
 
+		// 第3步: section行
 		if bytes.HasPrefix(line, sectionStart) && bytes.HasSuffix(line, sectionEnd) {
-			section = strings.ToLower(string(line[1: len(line)-1])) // section name case insensitive
+			section = strings.ToLower(string(line[1: len(line)-1])) // 获取小写的section名称
 			if comment.Len() > 0 {
-				cfg.sectionComment[section] = comment.String()
-				comment.Reset()
+				cfg.sectionComment[section] = comment.String() // 存储section注释
+				comment.Reset()                                // 很关键, 重置为空
 			}
 			if _, ok := cfg.data[section]; !ok {
-				cfg.data[section] = make(map[string]string)
+				cfg.data[section] = make(map[string]string) // 构建section当中的kv
 			}
 			continue
 		}
 
-		if _, ok := cfg.data[section]; !ok {
+		// 第4步: kv行
+		if _, ok := cfg.data[section]; !ok { // section是default
 			cfg.data[section] = make(map[string]string)
 		}
 		keyValue := bytes.SplitN(line, bEqual, 2)
 
-		key := string(bytes.TrimSpace(keyValue[0])) // key name case insensitive
-		key = strings.ToLower(key)
+		key := string(bytes.TrimSpace(keyValue[0]))
+		key = strings.ToLower(key) // key全部是小写
 
-		// handle include "other.conf"
+		// 第5步: include行, 意味着引入新文件
 		if len(keyValue) == 1 && strings.HasPrefix(key, "include") {
-
-			includefiles := strings.Fields(key)
+			includefiles := strings.Fields(key) // 获取字段[include, file, ...]
 			if includefiles[0] == "include" && len(includefiles) == 2 {
-
-				otherfile := strings.Trim(includefiles[1], "\"")
+				otherfile := strings.Trim(includefiles[1], `"`) // 去掉"
 				if !filepath.IsAbs(otherfile) {
 					otherfile = filepath.Join(dir, otherfile)
 				}
@@ -130,6 +149,7 @@ func (ini *IniConfig) parseData(dir string, data []byte) (*IniConfigContainer, e
 					return nil, err
 				}
 
+				// 数据保存和覆盖
 				for sec, dt := range i.data {
 					if _, ok := cfg.data[sec]; !ok {
 						cfg.data[sec] = make(map[string]string)
@@ -151,6 +171,7 @@ func (ini *IniConfig) parseData(dir string, data []byte) (*IniConfigContainer, e
 			}
 		}
 
+		// 第6步: 保存kv
 		if len(keyValue) != 2 {
 			return nil, errors.New("read the content error: \"" + string(line) + "\", should key = val")
 		}
@@ -160,6 +181,8 @@ func (ini *IniConfig) parseData(dir string, data []byte) (*IniConfigContainer, e
 		}
 
 		cfg.data[section][key] = ExpandValueEnv(string(val))
+
+		// 保存的是key注释, 即section.key; 注意: 如果只有section,没有key,这种注释不会被保存
 		if comment.Len() > 0 {
 			cfg.keyComment[section+"."+key] = comment.String()
 			comment.Reset()
@@ -186,12 +209,13 @@ func (ini *IniConfig) ParseData(data []byte) (Configer, error) {
 	return ini.parseData(dir, data)
 }
 
-// IniConfigContainer A Config represents the ini configuration.
-// When set and get value, support key as section:name type.
+//--------------------------------------------------------------------------------------------------
+
+// 实现的 Configer接口
 type IniConfigContainer struct {
-	data           map[string]map[string]string // section=> key:val
-	sectionComment map[string]string            // section : comment
-	keyComment     map[string]string            // id: []{comment, key...}; id 1 is for main comment.
+	data           map[string]map[string]string // section => key:val (存储ini文件有效的内容)
+	sectionComment map[string]string            // section : comment (存储的section的注释, 为了文件重新保存)
+	keyComment     map[string]string            // key : comment (存储的是key的注释, 为了文件重新保存)
 	sync.RWMutex
 }
 
@@ -290,7 +314,6 @@ func (c *IniConfigContainer) DefaultStrings(key string, defaultval []string) []s
 	return v
 }
 
-// GetSection returns map for the given section
 func (c *IniConfigContainer) GetSection(section string) (map[string]string, error) {
 	if v, ok := c.data[section]; ok {
 		return v, nil
@@ -298,18 +321,16 @@ func (c *IniConfigContainer) GetSection(section string) (map[string]string, erro
 	return nil, errors.New("not exist section")
 }
 
-// SaveConfigFile save the config into file.
-//
-// BUG(env): The environment variable config item will be saved with real value in SaveConfigFile Function.
+// 将 IniConfigContainer 内容保存为一个ini文件
+// section注释 -> section -> key注释 -> k,v
 func (c *IniConfigContainer) SaveConfigFile(filename string) (err error) {
-	// Write configuration file by filename.
 	f, err := os.Create(filename)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
 
-	// Get section or key comments. Fixed #1607
+	// 获取注释, "section", "section.key"
 	getCommentStr := func(section, key string) string {
 		var (
 			comment string
@@ -321,74 +342,76 @@ func (c *IniConfigContainer) SaveConfigFile(filename string) (err error) {
 			comment, ok = c.keyComment[section+"."+key]
 		}
 
+		// 对注释进行处理
 		if ok {
-			// Empty comment
 			if len(comment) == 0 || len(strings.TrimSpace(comment)) == 0 {
 				return string(bNumComment)
 			}
 			prefix := string(bNumComment)
-			// Add the line head character "#"
+			// 增加注释头 "#"
 			return prefix + strings.Replace(comment, lineBreak, lineBreak+prefix, -1)
 		}
+
 		return ""
 	}
 
 	buf := bytes.NewBuffer(nil)
-	// Save default section at first place
+	// default section, 没有section注释, 必须先写default
 	if dt, ok := c.data[defaultSection]; ok {
 		for key, val := range dt {
 			if key != " " {
-				// Write key comments.
+				// 写入key的注释
 				if v := getCommentStr(defaultSection, key); len(v) > 0 {
 					if _, err = buf.WriteString(v + lineBreak); err != nil {
 						return err
 					}
 				}
 
-				// Write key and value.
+				// 写入k,v
 				if _, err = buf.WriteString(key + string(bEqual) + val + lineBreak); err != nil {
 					return err
 				}
 			}
 		}
 
-		// Put a line between sections.
+		// 换行
 		if _, err = buf.WriteString(lineBreak); err != nil {
 			return err
 		}
 	}
-	// Save named sections
+
+	// 自定义 section, 有section注释
 	for section, dt := range c.data {
 		if section != defaultSection {
-			// Write section comments.
+			// 写入section注释
 			if v := getCommentStr(section, ""); len(v) > 0 {
 				if _, err = buf.WriteString(v + lineBreak); err != nil {
 					return err
 				}
 			}
 
-			// Write section name.
+			// 写入section
 			if _, err = buf.WriteString(string(sectionStart) + section + string(sectionEnd) + lineBreak); err != nil {
 				return err
 			}
 
 			for key, val := range dt {
 				if key != " " {
-					// Write key comments.
+					// 写入key注释
 					if v := getCommentStr(section, key); len(v) > 0 {
 						if _, err = buf.WriteString(v + lineBreak); err != nil {
 							return err
 						}
 					}
 
-					// Write key and value.
+					// 写入k,v
 					if _, err = buf.WriteString(key + string(bEqual) + val + lineBreak); err != nil {
 						return err
 					}
 				}
 			}
 
-			// Put a line between sections.
+			// 换行
 			if _, err = buf.WriteString(lineBreak); err != nil {
 				return err
 			}
@@ -398,9 +421,7 @@ func (c *IniConfigContainer) SaveConfigFile(filename string) (err error) {
 	return err
 }
 
-// Set writes a new value for key.
-// if write to one section, the key need be "section::key".
-// if the section is not existed, it panics.
+// 设置看k,v, 其中k支持 section::key的格式, section不存在则创建
 func (c *IniConfigContainer) Set(key, value string) error {
 	c.Lock()
 	defer c.Unlock()
@@ -428,7 +449,7 @@ func (c *IniConfigContainer) Set(key, value string) error {
 	return nil
 }
 
-// DIY returns the raw value by a given key.
+// 获取raw value
 func (c *IniConfigContainer) DIY(key string) (v interface{}, err error) {
 	if v, ok := c.data[strings.ToLower(key)]; ok {
 		return v, nil
@@ -436,7 +457,7 @@ func (c *IniConfigContainer) DIY(key string) (v interface{}, err error) {
 	return v, errors.New("key not find")
 }
 
-// section.key or key
+// 获取 section::key 或者 key, 辅助函数
 func (c *IniConfigContainer) getdata(key string) string {
 	if len(key) == 0 {
 		return ""
@@ -455,6 +476,7 @@ func (c *IniConfigContainer) getdata(key string) string {
 		section = defaultSection
 		k = sectionKey[0]
 	}
+
 	if v, ok := c.data[section]; ok {
 		if vv, ok := v[k]; ok {
 			return vv
