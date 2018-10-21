@@ -192,9 +192,7 @@ func (ini *IniConfig) parseData(dir string, data []byte) (*IniConfigContainer, e
 	return cfg, nil
 }
 
-// ParseData parse ini the data
-// When include other.conf,other.conf is either absolute directory
-// or under beego in default temporary directory(/tmp/beego[-username]).
+// 解析ini文件的内容, 注意: include文件是在/temp/beego-user目录下
 func (ini *IniConfig) ParseData(data []byte) (Configer, error) {
 	dir := "beego"
 	currentUser, err := user.Current()
@@ -219,13 +217,38 @@ type IniConfigContainer struct {
 	sync.RWMutex
 }
 
-// Bool returns the boolean value for a given key.
+// 获取 section::key 或者 key, 辅助函数, 实现所有值的获取
+func (c *IniConfigContainer) getdata(key string) string {
+	if len(key) == 0 {
+		return ""
+	}
+	c.RLock()
+	defer c.RUnlock()
+
+	var (
+		section, k string
+		sectionKey = strings.Split(strings.ToLower(key), "::")
+	)
+	if len(sectionKey) >= 2 {
+		section = sectionKey[0]
+		k = sectionKey[1]
+	} else {
+		section = defaultSection
+		k = sectionKey[0]
+	}
+
+	if v, ok := c.data[section]; ok {
+		if vv, ok := v[k]; ok {
+			return vv
+		}
+	}
+	return ""
+}
+
 func (c *IniConfigContainer) Bool(key string) (bool, error) {
 	return ParseBool(c.getdata(key))
 }
 
-// DefaultBool returns the boolean value for a given key.
-// if err != nil return defaultval
 func (c *IniConfigContainer) DefaultBool(key string, defaultval bool) bool {
 	v, err := c.Bool(key)
 	if err != nil {
@@ -234,13 +257,10 @@ func (c *IniConfigContainer) DefaultBool(key string, defaultval bool) bool {
 	return v
 }
 
-// Int returns the integer value for a given key.
 func (c *IniConfigContainer) Int(key string) (int, error) {
 	return strconv.Atoi(c.getdata(key))
 }
 
-// DefaultInt returns the integer value for a given key.
-// if err != nil return defaultval
 func (c *IniConfigContainer) DefaultInt(key string, defaultval int) int {
 	v, err := c.Int(key)
 	if err != nil {
@@ -249,13 +269,10 @@ func (c *IniConfigContainer) DefaultInt(key string, defaultval int) int {
 	return v
 }
 
-// Int64 returns the int64 value for a given key.
 func (c *IniConfigContainer) Int64(key string) (int64, error) {
 	return strconv.ParseInt(c.getdata(key), 10, 64)
 }
 
-// DefaultInt64 returns the int64 value for a given key.
-// if err != nil return defaultval
 func (c *IniConfigContainer) DefaultInt64(key string, defaultval int64) int64 {
 	v, err := c.Int64(key)
 	if err != nil {
@@ -264,13 +281,10 @@ func (c *IniConfigContainer) DefaultInt64(key string, defaultval int64) int64 {
 	return v
 }
 
-// Float returns the float value for a given key.
 func (c *IniConfigContainer) Float(key string) (float64, error) {
 	return strconv.ParseFloat(c.getdata(key), 64)
 }
 
-// DefaultFloat returns the float64 value for a given key.
-// if err != nil return defaultval
 func (c *IniConfigContainer) DefaultFloat(key string, defaultval float64) float64 {
 	v, err := c.Float(key)
 	if err != nil {
@@ -279,13 +293,10 @@ func (c *IniConfigContainer) DefaultFloat(key string, defaultval float64) float6
 	return v
 }
 
-// String returns the string value for a given key.
 func (c *IniConfigContainer) String(key string) string {
 	return c.getdata(key)
 }
 
-// DefaultString returns the string value for a given key.
-// if err != nil return defaultval
 func (c *IniConfigContainer) DefaultString(key string, defaultval string) string {
 	v := c.String(key)
 	if v == "" {
@@ -294,8 +305,7 @@ func (c *IniConfigContainer) DefaultString(key string, defaultval string) string
 	return v
 }
 
-// Strings returns the []string value for a given key.
-// Return nil if config value does not exist or is empty.
+// 获取字符串数组, 以;进行分割
 func (c *IniConfigContainer) Strings(key string) []string {
 	v := c.String(key)
 	if v == "" {
@@ -304,8 +314,6 @@ func (c *IniConfigContainer) Strings(key string) []string {
 	return strings.Split(v, ";")
 }
 
-// DefaultStrings returns the []string value for a given key.
-// if err != nil return defaultval
 func (c *IniConfigContainer) DefaultStrings(key string, defaultval []string) []string {
 	v := c.Strings(key)
 	if v == nil {
@@ -455,34 +463,6 @@ func (c *IniConfigContainer) DIY(key string) (v interface{}, err error) {
 		return v, nil
 	}
 	return v, errors.New("key not find")
-}
-
-// 获取 section::key 或者 key, 辅助函数
-func (c *IniConfigContainer) getdata(key string) string {
-	if len(key) == 0 {
-		return ""
-	}
-	c.RLock()
-	defer c.RUnlock()
-
-	var (
-		section, k string
-		sectionKey = strings.Split(strings.ToLower(key), "::")
-	)
-	if len(sectionKey) >= 2 {
-		section = sectionKey[0]
-		k = sectionKey[1]
-	} else {
-		section = defaultSection
-		k = sectionKey[0]
-	}
-
-	if v, ok := c.data[section]; ok {
-		if vv, ok := v[k]; ok {
-			return vv
-		}
-	}
-	return ""
 }
 
 func init() {
