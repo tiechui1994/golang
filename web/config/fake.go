@@ -6,6 +6,11 @@ import (
 	"strings"
 )
 
+/**
+ 基于内存方式的Config存储, 不提供文件的落地, 以及文件的解析.
+ 在运行时手动构建存储
+*/
+
 type fakeConfigContainer struct {
 	data map[string]string
 }
@@ -112,7 +117,6 @@ func (c *fakeConfigContainer) SaveConfigFile(filename string) error {
 
 var _ Configer = new(fakeConfigContainer)
 
-// NewFakeConfig return a fake Configer
 func NewFakeConfig() Configer {
 	return &fakeConfigContainer{
 		data: make(map[string]string),

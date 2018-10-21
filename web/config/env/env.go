@@ -4,12 +4,16 @@ import (
 	"fmt"
 	"os"
 	"strings"
-
-	"github.com/astaxie/beego/utils"
+	"golang/web/utils"
 )
+
+/**
+ 加载系统环境变量作为配置文件.
+*/
 
 var env *utils.BeeMap
 
+// 加载环境变量
 func init() {
 	env = utils.NewBeeMap()
 	for _, e := range os.Environ() {
@@ -18,8 +22,6 @@ func init() {
 	}
 }
 
-// Get returns a value by key.
-// If the key does not exist, the default value will be returned.
 func Get(key string, defVal string) string {
 	if val := env.Get(key); val != nil {
 		return val.(string)
@@ -27,8 +29,6 @@ func Get(key string, defVal string) string {
 	return defVal
 }
 
-// MustGet returns a value by key.
-// If the key does not exist, it will return an error.
 func MustGet(key string) (string, error) {
 	if val := env.Get(key); val != nil {
 		return val.(string), nil
@@ -36,14 +36,13 @@ func MustGet(key string) (string, error) {
 	return "", fmt.Errorf("no env variable with %s", key)
 }
 
-// Set sets a value in the ENV copy.
-// This does not affect the child process environment.
+// env是环境变量在内存当中的一个拷贝
+// Set只会影响到当前进程使用的环境变量的值, 对于其他进程没有影响
 func Set(key string, value string) {
 	env.Set(key, value)
 }
 
-// MustSet sets a value in the ENV copy and the child process environment.
-// It returns an error in case the set operation failed.
+// 在Set的基础上, 会修改所有进程中环境变量的值
 func MustSet(key string, value string) error {
 	err := os.Setenv(key, value)
 	if err != nil {
@@ -53,7 +52,7 @@ func MustSet(key string, value string) error {
 	return nil
 }
 
-// GetAll returns all keys/values in the current child process environment.
+// 获取当前进程中是所有环境变量(内存当中经过修改的那份)
 func GetAll() map[string]string {
 	items := env.Items()
 	envs := make(map[string]string, env.Count())
