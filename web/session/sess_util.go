@@ -42,8 +42,8 @@ func EncodeGob(obj map[interface{}]interface{}) ([]byte, error) {
 		gob.Register(v)
 	}
 	buf := bytes.NewBuffer(nil) // 生成一个空buffer
-	enc := gob.NewEncoder(buf) // 根据buffer生成编码器
-	err := enc.Encode(obj) // 将obj编码到buffer, 即buffer存储了编码结果
+	enc := gob.NewEncoder(buf)  // 根据buffer生成编码器
+	err := enc.Encode(obj)      // 将obj编码到buffer, 即buffer存储了编码结果
 	if err != nil {
 		return []byte(""), err
 	}
@@ -53,7 +53,7 @@ func EncodeGob(obj map[interface{}]interface{}) ([]byte, error) {
 // DecodeGob 将gob解码为map
 func DecodeGob(encoded []byte) (map[interface{}]interface{}, error) {
 	buf := bytes.NewBuffer(encoded) // 生成一个buffer, buffer已经有内容
-	dec := gob.NewDecoder(buf) // 生成解码器
+	dec := gob.NewDecoder(buf)      // 生成解码器
 	var out map[interface{}]interface{}
 	err := dec.Decode(&out) // 将buffer的内容解码到out
 	if err != nil {
@@ -74,10 +74,6 @@ func generateRandomKey(strength int) []byte {
 // Encryption -----------------------------------------------------------------
 
 // 加密, block包含了秘钥和加密算法, value是原始值, 原理很简单: 固定长度随机值+原始值的处理( a XOR 1 XOR 1 == a)
-// encrypt encrypts a value using the given block in counter mode.
-//
-// A random initialization vector (http://goo.gl/zF67k) with the length of the
-// block size is prepended to the resulting ciphertext.
 func encrypt(block cipher.Block, value []byte) ([]byte, error) {
 	iv := generateRandomKey(block.BlockSize())
 	if iv == nil {
@@ -91,10 +87,6 @@ func encrypt(block cipher.Block, value []byte) ([]byte, error) {
 }
 
 // 解密: 先获取随机值, 然后解码
-// decrypt decrypts a value using the given block in counter mode.
-//
-// The value to be decrypted must be prepended by a initialization vector
-// (http://goo.gl/zF67k) with the length of the block size.
 func decrypt(block cipher.Block, value []byte) ([]byte, error) {
 	size := block.BlockSize()
 	if len(value) > size {

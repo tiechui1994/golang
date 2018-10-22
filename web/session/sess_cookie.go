@@ -63,7 +63,7 @@ func (st *CookieSessionStore) SessionRelease(w http.ResponseWriter) {
 	encodedCookie, err := encodeCookie(cookiepder.block, cookiepder.config.SecurityKey, cookiepder.config.SecurityName, st.values)
 	if err == nil {
 		cookie := &http.Cookie{
-			Name: cookiepder.config.CookieName,
+			Name:     cookiepder.config.CookieName,
 			Value:    url.QueryEscape(encodedCookie), // 与获取SessionId时的方法对应
 			Path:     "/",
 			HttpOnly: true,
@@ -90,12 +90,14 @@ type CookieProvider struct {
 }
 
 // 通过配置初始化引擎. 创建过程在注册的时候已经完成
-// json config:
-// 	securityKey - hash string
-// 	blockKey - gob encode hash string. it's saved as aes crypto.
-// 	securityName - recognized name in encoded cookie string
-// 	cookieName - cookie name
-// 	maxage - cookie max life time.
+/*
+json config:
+ 	securityKey - hash string
+ 	blockKey - gob encode hash string. it's saved as aes crypto.
+ 	securityName - recognized name in encoded cookie string
+ 	cookieName - cookie name
+ 	maxage - cookie max life time.
+*/
 func (pder *CookieProvider) SessionInit(maxlifetime int64, config string) error {
 	pder.config = &cookieConfig{}
 	err := json.Unmarshal([]byte(config), pder.config)
