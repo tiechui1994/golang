@@ -16,7 +16,7 @@ import (
 	"crypto/sha1"
 	"sync"
 	"unsafe"
-	"reflect"
+	"github.com/astaxie/beego"
 )
 
 func generateRandomKey(length int) (data []byte) {
@@ -155,6 +155,8 @@ func (set *threadSafeSet) Iter() <-chan interface{} {
 }
 
 func main() {
+	beego.BConfig.Listen.Graceful = true
+	beego.Run()
 }
 
 type Null struct {
