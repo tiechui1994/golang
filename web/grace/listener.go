@@ -7,6 +7,7 @@ import (
 	"time"
 )
 
+// 监听, 在net.Listener的基础上增加控制
 type graceListener struct {
 	net.Listener
 	stop    chan error
@@ -20,8 +21,9 @@ func newGraceListener(l net.Listener, srv *Server) (el *graceListener) {
 		stop:     make(chan error),
 		server:   srv,
 	}
+	// 为什么??
 	go func() {
-		<-el.stop
+		<-el.stop // 后台监听, 一旦有错误产生,
 		el.stopped = true
 		el.stop <- el.Listener.Close()
 	}()

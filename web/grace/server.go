@@ -20,14 +20,14 @@ import (
 // 在http.Server的基础上增加新功能
 type Server struct {
 	*http.Server
-	GraceListener    net.Listener
-	SignalHooks      map[int]map[os.Signal][]func() // int 0/1 信号的前置工作/后置工作, os.Signal是特定的系统信号
-	tlsInnerListener *graceListener
+	GraceListener    net.Listener                   //
+	tlsInnerListener *graceListener                 //
+	SignalHooks      map[int]map[os.Signal][]func() // int 0/1 信号处理的前置工作/后置工作, os.Signal是特定的系统信号
 	wg               sync.WaitGroup
-	sigChan          chan os.Signal
-	isChild          bool
-	state            uint8
-	Network          string
+	sigChan          chan os.Signal // 系统信号产生 -> sigChan -> 调用处理函数进行处理
+	isChild          bool           // 是否监听打开的fd(after forking)
+	state            uint8          // 状态
+	Network          string         // 网络协议, tcp
 }
 
 // 对http.Server的Serve进行封装, 增加了处理工作
@@ -183,10 +183,11 @@ func (srv *Server) ListenAndServeMutualTLS(certFile, keyFile, trustFile string) 
 	return srv.Serve()
 }
 
-// getListener either opens a new socket to listen on, or takes the acceptor socket
-// it got passed when restarted.
+// 获取Listener: 方式一, 打开新的Socket并监听; 方式二, 获取
+//  takes the acceptor socket it got passed when restarted.
 func (srv *Server) getListener(laddr string) (l net.Listener, err error) {
 	if srv.isChild {
+		// 方式二
 		var ptrOffset uint
 		if len(socketPtrOffsetMap) > 0 {
 			ptrOffset = socketPtrOffsetMap[laddr]
@@ -200,6 +201,7 @@ func (srv *Server) getListener(laddr string) (l net.Listener, err error) {
 			return
 		}
 	} else {
+		// 方式一
 		l, err = net.Listen(srv.Network, laddr)
 		if err != nil {
 			err = fmt.Errorf("net.Listen error: %v", err)
@@ -309,6 +311,7 @@ func (srv *Server) fork() (err error) {
 	}
 	runningServersForked = true
 
+	// 参数: ???
 	var files = make([]*os.File, len(runningServers))
 	var orderArgs = make([]string, len(runningServers))
 	for _, srvPtr := range runningServers {
@@ -337,6 +340,8 @@ func (srv *Server) fork() (err error) {
 		args = append(args, fmt.Sprintf(`-socketorder=%s`, strings.Join(orderArgs, ",")))
 		log.Println(args)
 	}
+
+	// 执行cmd, 产生新的子进程
 	cmd := exec.Command(path, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
