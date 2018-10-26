@@ -20,8 +20,8 @@ import (
 // 在http.Server的基础上增加新功能
 type Server struct {
 	*http.Server
-	GraceListener    net.Listener                   //
-	tlsInnerListener *graceListener                 //
+	GraceListener    net.Listener                   // ???
+	tlsInnerListener *graceListener                 // ??? 内置的Listener
 	SignalHooks      map[int]map[os.Signal][]func() // int 0/1 信号处理的前置工作/后置工作, os.Signal是特定的系统信号
 	wg               sync.WaitGroup
 	sigChan          chan os.Signal // 系统信号产生 -> sigChan -> 调用处理函数进行处理
@@ -311,7 +311,7 @@ func (srv *Server) fork() (err error) {
 	}
 	runningServersForked = true
 
-	// 参数: ???
+	// 获取运行命令的参数 和 已经打开的文件
 	var files = make([]*os.File, len(runningServers))
 	var orderArgs = make([]string, len(runningServers))
 	for _, srvPtr := range runningServers {
@@ -345,6 +345,8 @@ func (srv *Server) fork() (err error) {
 	cmd := exec.Command(path, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	// ExtraFiles指定新进程要继承的其他打开文件. 它不包括标准输入,标准输出或标准错误.
+	// 如果非零, 则条目i变为文件描述符3 + i.
 	cmd.ExtraFiles = files
 	err = cmd.Start()
 	if err != nil {
@@ -354,7 +356,7 @@ func (srv *Server) fork() (err error) {
 	return
 }
 
-// RegisterSignalHook registers a function to be run PreSignal or PostSignal for a given signal.
+// 注册信号函数
 func (srv *Server) RegisterSignalHook(ppFlag int, sig os.Signal, f func()) (err error) {
 	if ppFlag != PreSignal && ppFlag != PostSignal {
 		err = fmt.Errorf("Invalid ppFlag argument. Must be either grace.PreSignal or grace.PostSignal")
