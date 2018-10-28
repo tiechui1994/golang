@@ -32,7 +32,7 @@ func (c *graceConn) Close() (err error) {
 		c.m.Unlock()
 		return
 	}
-	c.server.wg.Done()
+	c.server.wg.Done() // 一次请求处理完毕
 	c.closed = true
 	c.m.Unlock()
 	return c.Conn.Close()
