@@ -469,7 +469,7 @@ func splitPath(key string) []string {
 *************************************************************************/
 // 返回值说明:
 // bool, 是否包含通配符
-// []string, 正则表达式分组
+// []string, 参数
 // string,  正则表达式
 func splitSegment(key string) (bool, []string, string) {
 	// "*" 前缀检查
@@ -484,15 +484,17 @@ func splitSegment(key string) (bool, []string, string) {
 	if strings.ContainsAny(key, ":") {
 		var (
 			skipNum   int // 需要忽略的字母个数,
-			paramsNum int
-			startCom  bool // 通用表达式匹配, ":xxx:int|string"
-			startExp  bool // 正则表达式, ":xxx(....)"
-			out       []rune
-			param     []rune // 参数
-			exp       []rune // 正则表达式
+			paramsNum int // 参数个数
+
+			startCom bool // 通用表达式匹配, ":xxx:int|string"
+			startExp bool // 正则表达式, ":xxx(....)"
+
+			param []rune // 参数
+			exp   []rune // 记录startExp过程中产生的是正则表达式
+			out   []rune // 记录函数返回的正则表达式
 		)
 
-		params := make([]string, 0)
+		params := make([]string, 0) // 参数, 函数返回的[]string
 		reg := regexp.MustCompile(`[a-zA-Z0-9_]+`)
 
 		for i, v := range key {
@@ -502,38 +504,40 @@ func splitSegment(key string) (bool, []string, string) {
 			}
 
 			if startCom {
-				//:id:int and :name:string
+				// 通用字符串匹配
 				if v == ':' {
-					if len(key) >= i+4 {
-						if key[i+1:i+4] == "int" {
-							out = append(out, []rune("([0-9]+)")...)
-							params = append(params, ":"+string(param))
-							startCom = false
-							startExp = false
-							skipNum = 3
-							param = make([]rune, 0)
-							paramsNum++
-							continue
-						}
+					// int 匹配
+					if len(key) >= i+4 && key[i+1:i+4] == "int" {
+						out = append(out, []rune("([0-9]+)")...)
+						params = append(params, ":"+string(param))
+						startCom = false
+						startExp = false
+						skipNum = 3
+						param = make([]rune, 0)
+						paramsNum++
+						continue
 					}
-					if len(key) >= i+7 {
-						if key[i+1:i+7] == "string" {
-							out = append(out, []rune(`([\w]+)`)...)
-							params = append(params, ":"+string(param))
-							paramsNum++
-							startCom = false
-							startExp = false
-							skipNum = 6
-							param = make([]rune, 0)
-							continue
-						}
+
+					// string 匹配
+					if len(key) >= i+7 && key[i+1:i+7] == "string" {
+						out = append(out, []rune(`([\w]+)`)...)
+						params = append(params, ":"+string(param))
+						paramsNum++
+						startCom = false
+						startExp = false
+						skipNum = 6
+						param = make([]rune, 0)
+						continue
 					}
 				}
-				// params only support a-zA-Z0-9
+
+				// 参数匹配, "[a-zA-Z0-9_]"
 				if reg.MatchString(string(v)) {
 					param = append(param, v)
 					continue
 				}
+
+				// 参数后面非通用参数
 				if v != '(' {
 					out = append(out, []rune(`(.+)`)...)
 					params = append(params, ":"+string(param))
@@ -543,21 +547,25 @@ func splitSegment(key string) (bool, []string, string) {
 					startExp = false
 				}
 			}
+
 			if startExp {
 				if v != ')' {
 					exp = append(exp, v)
 					continue
 				}
 			}
-			// Escape Sequence '\'
-			if i > 0 && key[i-1] == '\\' {
+
+			// 开头
+			if i > 0 && key[i-1] == '\\' { // 转义字符
 				out = append(out, v)
-			} else if v == ':' { // 参数/通用表达式
+			} else if v == ':' { // 参数|通用表达式
 				param = make([]rune, 0)
 				startCom = true
 			} else if v == '(' { // 正则表达式开始
 				startExp = true
 				startCom = false
+
+				// 正则表达式前面可能产生参数
 				if len(param) > 0 {
 					params = append(params, ":"+string(param))
 					param = make([]rune, 0)
