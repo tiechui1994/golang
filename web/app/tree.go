@@ -13,33 +13,33 @@ var (
 	allowSuffixExt = []string{".json", ".xml", ".html"}
 )
 
-// Tree has three elements: FixRouter/wildcard/leaves
-// fixRouter stores Fixed Router
-// wildcard stores params
-// leaves store the endpoint information
+// Tree有三种元素: FixRouter / wildcard / leaves
+// fixRouter存储固定路由器
+// wildcard存储参数
+// leaves存储端点信息
 type Tree struct {
-	//prefix set for static router
-	prefix string
-	//search fix route first
-	fixrouters []*Tree
-	//if set, failure to match fixrouters search then search wildcard
-	wildcard *Tree
-	//if set, failure to match wildcard search
-	leaves []*leafInfo
+	prefix     string      // 静态路由
+	fixrouters []*Tree     // 首先匹配的是固定路由
+	wildcard   *Tree       // 当fixrouters匹配失败, 搜索wildcard
+	leaves     []*leafInfo // 当wildcard匹配失败, 搜索 leaves
 }
 
-// NewTree return a new Tree
 func NewTree() *Tree {
 	return &Tree{}
 }
 
 // AddTree will add tree to the exist Tree
-// prefix should has no params
+// prefix是一个没有参数的路由
 func (t *Tree) AddTree(prefix string, tree *Tree) {
-	t.addtree(splitPath(prefix), tree, nil, "")
+	t.addTree(splitPath(prefix), tree, nil, "")
 }
 
-func (t *Tree) addtree(segments []string, tree *Tree, wildcards []string, reg string) {
+// 参数说明:
+// segments: 路由使用"/"切分后的数组
+// tree: 目标Tree
+// wildcards: 通配参数
+// reg:
+func (t *Tree) addTree(segments []string, tree *Tree, wildcards []string, reg string) {
 	if len(segments) == 0 {
 		panic("prefix should has path")
 	}
@@ -49,7 +49,7 @@ func (t *Tree) addtree(segments []string, tree *Tree, wildcards []string, reg st
 	if len(params) > 0 && params[0] == ":" {
 		params = params[1:]
 		if len(segments[1:]) > 0 {
-			t.addtree(segments[1:], tree, append(wildcards, params...), reg)
+			t.addTree(segments[1:], tree, append(wildcards, params...), reg)
 		} else {
 			filterTreeWithPrefix(tree, wildcards, reg)
 		}
@@ -137,12 +137,12 @@ func (t *Tree) addtree(segments []string, tree *Tree, wildcards []string, reg st
 			}
 		}
 		reg = strings.TrimRight(strings.TrimRight(reg, "/")+"/"+regexpStr, "/")
-		t.wildcard.addtree(segments[1:], tree, append(wildcards, params...), reg)
+		t.wildcard.addTree(segments[1:], tree, append(wildcards, params...), reg)
 	} else {
 		subTree := NewTree()
 		subTree.prefix = seg
 		t.fixrouters = append(t.fixrouters, subTree)
-		subTree.addtree(segments[1:], tree, append(wildcards, params...), reg)
+		subTree.addTree(segments[1:], tree, append(wildcards, params...), reg)
 	}
 }
 
@@ -451,49 +451,66 @@ func splitPath(key string) []string {
 	return strings.Split(key, "/")
 }
 
-// "admin" -> false, nil, ""
-// ":id" -> true, [:id], ""
-// "?:id" -> true, [: :id], ""        : meaning can empty
-// ":id:int" -> true, [:id], ([0-9]+)
-// ":name:string" -> true, [:name], ([\w]+)
-// ":id([0-9]+)" -> true, [:id], ([0-9]+)
-// ":id([0-9]+)_:name" -> true, [:id :name], ([0-9]+)_(.+)
-// "cms_:id_:page.html" -> true, [:id_ :page], cms_(.+)(.+).html
-// "cms_:id(.+)_:page.html" -> true, [:id :page], cms_(.+)_(.+).html
-// "*" -> true, [:splat], ""
-// "*.*" -> true,[. :path :ext], ""      . meaning separator
+/************************************************************************
+"admin"        -> false, nil, ""
+
+":id"               -> true, [:id], ""
+"?:id"              -> true, [: :id], ""        : meaning can empty
+":id:int"           -> true, [:id], ([0-9]+)
+":name:string"      -> true, [:name], ([\w]+)
+":id([0-9]+)"  	    -> true, [:id], ([0-9]+)
+":id([0-9]+)_:name" -> true, [:id :name], ([0-9]+)_(.+)
+
+"cms_:id_:page.html"     -> true, [:id_ :page], cms_(.+)(.+).html
+"cms_:id(.+)_:page.html" -> true, [:id :page], cms_(.+)_(.+).html
+
+"*"   -> true, [:splat], ""
+"*.*" -> true,[. :path :ext], ""      . meaning separator
+*************************************************************************/
+// 返回值说明:
+// bool, 是否包含通配符
+// []string, 正则表达式分组
+// string,  正则表达式
 func splitSegment(key string) (bool, []string, string) {
+	// "*" 前缀检查
 	if strings.HasPrefix(key, "*") {
 		if key == "*.*" {
 			return true, []string{".", ":path", ":ext"}, ""
 		}
 		return true, []string{":splat"}, ""
 	}
+
+	// ":" 分隔符检查
 	if strings.ContainsAny(key, ":") {
-		var paramsNum int
-		var out []rune
-		var start bool
-		var startexp bool
-		var param []rune
-		var expt []rune
-		var skipnum int
-		params := []string{}
+		var (
+			skipNum   int // 需要忽略的字母个数,
+			paramsNum int
+			startCom  bool // 通用表达式匹配, ":xxx:int|string"
+			startExp  bool // 正则表达式, ":xxx(....)"
+			out       []rune
+			param     []rune // 参数
+			exp       []rune // 正则表达式
+		)
+
+		params := make([]string, 0)
 		reg := regexp.MustCompile(`[a-zA-Z0-9_]+`)
+
 		for i, v := range key {
-			if skipnum > 0 {
-				skipnum--
+			if skipNum > 0 {
+				skipNum--
 				continue
 			}
-			if start {
+
+			if startCom {
 				//:id:int and :name:string
 				if v == ':' {
 					if len(key) >= i+4 {
 						if key[i+1:i+4] == "int" {
 							out = append(out, []rune("([0-9]+)")...)
 							params = append(params, ":"+string(param))
-							start = false
-							startexp = false
-							skipnum = 3
+							startCom = false
+							startExp = false
+							skipNum = 3
 							param = make([]rune, 0)
 							paramsNum++
 							continue
@@ -504,9 +521,9 @@ func splitSegment(key string) (bool, []string, string) {
 							out = append(out, []rune(`([\w]+)`)...)
 							params = append(params, ":"+string(param))
 							paramsNum++
-							start = false
-							startexp = false
-							skipnum = 6
+							startCom = false
+							startExp = false
+							skipNum = 6
 							param = make([]rune, 0)
 							continue
 						}
@@ -522,50 +539,53 @@ func splitSegment(key string) (bool, []string, string) {
 					params = append(params, ":"+string(param))
 					param = make([]rune, 0)
 					paramsNum++
-					start = false
-					startexp = false
+					startCom = false
+					startExp = false
 				}
 			}
-			if startexp {
+			if startExp {
 				if v != ')' {
-					expt = append(expt, v)
+					exp = append(exp, v)
 					continue
 				}
 			}
 			// Escape Sequence '\'
 			if i > 0 && key[i-1] == '\\' {
 				out = append(out, v)
-			} else if v == ':' {
+			} else if v == ':' { // 参数/通用表达式
 				param = make([]rune, 0)
-				start = true
-			} else if v == '(' {
-				startexp = true
-				start = false
+				startCom = true
+			} else if v == '(' { // 正则表达式开始
+				startExp = true
+				startCom = false
 				if len(param) > 0 {
 					params = append(params, ":"+string(param))
 					param = make([]rune, 0)
 				}
 				paramsNum++
-				expt = make([]rune, 0)
-				expt = append(expt, '(')
-			} else if v == ')' {
-				startexp = false
-				expt = append(expt, ')')
-				out = append(out, expt...)
+				exp = make([]rune, 0)
+				exp = append(exp, '(')
+			} else if v == ')' { // 正则表达式结束
+				startExp = false
+				exp = append(exp, ')')
+				out = append(out, exp...)
 				param = make([]rune, 0)
-			} else if v == '?' {
+			} else if v == '?' { //
 				params = append(params, ":")
 			} else {
 				out = append(out, v)
 			}
 		}
+
 		if len(param) > 0 {
 			if paramsNum > 0 {
 				out = append(out, []rune(`(.+)`)...)
 			}
 			params = append(params, ":"+string(param))
 		}
+
 		return true, params, string(out)
 	}
+
 	return false, nil, ""
 }
