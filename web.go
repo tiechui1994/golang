@@ -4,6 +4,7 @@ import (
 	"strings"
 	"regexp"
 	"fmt"
+	"path/filepath"
 )
 
 func splitSegment(key string) (bool, []string, string) {
@@ -135,7 +136,7 @@ func splitSegment(key string) (bool, []string, string) {
 	return false, nil, ""
 }
 
-func main() {
+func TestSplitSegment() {
 	items := map[string]struct {
 		isReg  bool
 		params []string
@@ -162,6 +163,16 @@ func main() {
 			fmt.Println("error")
 		}
 	}
+}
 
-	fmt.Println(splitSegment("*b"))
+func main() {
+	mp := make(map[string]map[string]int)
+
+	mp["1"] = map[string]int{"001": 100}
+	oo := mp["1"]
+	oo["002"] = 120
+	fmt.Println(mp)
+
+	fmt.Println(filepath.Join(filepath.Dir("../"), "yy"))
+	fmt.Println(filepath.Abs("../"))
 }
