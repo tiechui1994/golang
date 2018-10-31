@@ -34,18 +34,21 @@ func (t *Tree) AddTree(prefix string, tree *Tree) {
 	t.addTree(splitPath(prefix), tree, nil, "")
 }
 
-// 参数说明:
-// segments: 路由使用"/"切分后的数组
-// tree: 目标Tree
-// wildcards: 通配参数
-// reg:
+/*
+参数说明:
+ 	segments: 路由使用"/"切分后的数组
+ 	tree: 目标Tree
+ 	wildcards: 参数
+ 	reg:
+*/
 func (t *Tree) addTree(segments []string, tree *Tree, wildcards []string, reg string) {
 	if len(segments) == 0 {
 		panic("prefix should has path")
 	}
 	seg := segments[0]
 	iswild, params, regexpStr := splitSegment(seg)
-	// if it's ? meaning can igone this, so add one more rule for it
+
+	// 以 ? 开头, 忽略之
 	if len(params) > 0 && params[0] == ":" {
 		params = params[1:]
 		if len(segments[1:]) > 0 {
@@ -54,16 +57,21 @@ func (t *Tree) addTree(segments []string, tree *Tree, wildcards []string, reg st
 			filterTreeWithPrefix(tree, wildcards, reg)
 		}
 	}
-	//Rule: /login/*/access match /login/2009/11/access
-	//if already has *, and when loop the access, should as a regexpStr
+
+	// Rule: /login/*/access 可以匹配 /login/2009/11/access
+	//
+	// if already has *, and when loop the access, should as a regexpStr
 	if !iswild && utils.InSlice(":splat", wildcards) {
 		iswild = true
 		regexpStr = seg
 	}
-	//Rule: /user/:id/*
+
+	// Rule: /user/:id/*
 	if seg == "*" && len(wildcards) > 0 && reg == "" {
 		regexpStr = "(.+)"
 	}
+
+	// 只用一个segment
 	if len(segments) == 1 {
 		if iswild {
 			if regexpStr != "" {
@@ -439,10 +447,13 @@ func (leaf *leafInfo) match(treePattern string, wildcardValues []string, ctx *co
 	return true
 }
 
-// "/" -> []
-// "/admin" -> ["admin"]
-// "/admin/" -> ["admin"]
-// "/admin/users" -> ["admin", "users"]
+/*
+ 路径切割:
+ "/" -> []
+ "/admin" -> ["admin"]
+ "/admin/" -> ["admin"]
+ "/admin/users" -> ["admin", "users"]
+*/
 func splitPath(key string) []string {
 	key = strings.Trim(key, "/ ")
 	if key == "" {
@@ -467,10 +478,19 @@ func splitPath(key string) []string {
 "*"   -> true, [:splat], ""
 "*.*" -> true,[. :path :ext], ""      . meaning separator
 *************************************************************************/
-// 返回值说明:
-// bool, 是否包含通配符
-// []string, 参数
-// string,  正则表达式
+
+/**
+返回值说明:
+bool, 是否是正则表达式
+[]string, 分组数组
+string,  正则表达式
+
+思路:
+	1. 参数检测(命名参数 | 匿名参数"?")
+	2. 转换正则表达式, 以"("开头, 则就为正则表达式; ":"开头, 且后面是int, string, 需要转换;
+       其他, 转换为`(.+)xxx`, 其中xxx表示 非[0-9A-Za-z_)]字符
+	3. 转向第1步
+*/
 func splitSegment(key string) (bool, []string, string) {
 	// "*" 前缀检查
 	if strings.HasPrefix(key, "*") {
@@ -494,7 +514,7 @@ func splitSegment(key string) (bool, []string, string) {
 			out   []rune // 记录函数返回的正则表达式
 		)
 
-		params := make([]string, 0) // 参数, 函数返回的[]string
+		params := make([]string, 0) // 参数数组, 函数返回的[]string
 		reg := regexp.MustCompile(`[a-zA-Z0-9_]+`)
 
 		for i, v := range key {
@@ -504,7 +524,13 @@ func splitSegment(key string) (bool, []string, string) {
 			}
 
 			if startCom {
-				// 通用字符串匹配
+				// 参数匹配, "[a-zA-Z0-9_]"
+				if reg.MatchString(string(v)) {
+					param = append(param, v)
+					continue
+				}
+
+				// 通用字符串匹配; 一个匹配回合的匹配结束
 				if v == ':' {
 					// int 匹配
 					if len(key) >= i+4 && key[i+1:i+4] == "int" {
@@ -531,13 +557,7 @@ func splitSegment(key string) (bool, []string, string) {
 					}
 				}
 
-				// 参数匹配, "[a-zA-Z0-9_]"
-				if reg.MatchString(string(v)) {
-					param = append(param, v)
-					continue
-				}
-
-				// 参数后面非通用参数
+				// 其他, 不是通用字符串, 也不是正则表达式; 一个匹配回合的匹配结束
 				if v != '(' {
 					out = append(out, []rune(`(.+)`)...)
 					params = append(params, ":"+string(param))
@@ -549,6 +569,7 @@ func splitSegment(key string) (bool, []string, string) {
 			}
 
 			if startExp {
+				// 正则表达式匹配过程;
 				if v != ')' {
 					exp = append(exp, v)
 					continue
@@ -558,7 +579,7 @@ func splitSegment(key string) (bool, []string, string) {
 			// 开头
 			if i > 0 && key[i-1] == '\\' { // 转义字符
 				out = append(out, v)
-			} else if v == ':' { // 参数|通用表达式
+			} else if v == ':' { // 命名参数 | 通用表达式
 				param = make([]rune, 0)
 				startCom = true
 			} else if v == '(' { // 正则表达式开始
@@ -570,6 +591,7 @@ func splitSegment(key string) (bool, []string, string) {
 					params = append(params, ":"+string(param))
 					param = make([]rune, 0)
 				}
+
 				paramsNum++
 				exp = make([]rune, 0)
 				exp = append(exp, '(')
@@ -578,10 +600,10 @@ func splitSegment(key string) (bool, []string, string) {
 				exp = append(exp, ')')
 				out = append(out, exp...)
 				param = make([]rune, 0)
-			} else if v == '?' { //
+			} else if v == '?' { // 匿名参数,
 				params = append(params, ":")
 			} else {
-				out = append(out, v)
+				out = append(out, v) // 正则表达"(...)", 通用表达式后面的内容
 			}
 		}
 

@@ -80,7 +80,7 @@ func Encrypt(block cipher.Block, value []byte) ([]byte, error) {
 	return append(iv, value...), nil
 }
 
-func cookieExample() {
+func CookieExample() {
 	var (
 		name     = "cookie"
 		hashKey  = "hash"
