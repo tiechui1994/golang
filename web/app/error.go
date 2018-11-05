@@ -68,6 +68,7 @@ var tpl = `
 `
 
 // render default application error page with error and stack string.
+// 使用err和stack字符串render默认应app错误页面
 func showErr(err interface{}, ctx *context.Context, stack string) {
 	t, _ := template.New("beegoerrortemp").Parse(tpl)
 	data := map[string]string{
@@ -355,10 +356,8 @@ func responseError(rw http.ResponseWriter, r *http.Request, errCode int, errCont
 	t.Execute(rw, data)
 }
 
-// ErrorHandler registers http.HandlerFunc to each http err code string.
-// usage:
-// 	beego.ErrorHandler("404",NotFound)
-//	beego.ErrorHandler("500",InternalServerError)
+// beego.ErrorHandler("404",NotFound)
+// 注册错误处理函数HandlerFunc -> func(ResponseWriter, *Request)
 func ErrorHandler(code string, h http.HandlerFunc) *App {
 	ErrorMaps[code] = &errorInfo{
 		errorType: errorTypeHandler,
@@ -396,7 +395,9 @@ func Exception(errCode uint64, ctx *context.Context) {
 
 // show error string as simple text message.
 // if error string is empty, show 503 or 500 error as default.
+//
 func exception(errCode string, ctx *context.Context) {
+	// 获取错误码
 	atoi := func(code string) int {
 		v, err := strconv.Atoi(code)
 		if err == nil {
@@ -414,13 +415,14 @@ func exception(errCode string, ctx *context.Context) {
 			return
 		}
 	}
-	//if 50x error has been removed from errorMap
+
+	// if 50x error has been removed from errorMap
 	ctx.ResponseWriter.WriteHeader(atoi(errCode))
 	ctx.WriteString(errCode)
 }
 
 func executeError(err *errorInfo, ctx *context.Context, code int) {
-	//make sure to log the error in the access log
+	// 确保在access log中记录错误
 	logAccess(ctx, nil, code)
 
 	if err.errorType == errorTypeHandler {
@@ -428,6 +430,7 @@ func executeError(err *errorInfo, ctx *context.Context, code int) {
 		err.handler(ctx.ResponseWriter, ctx.Request)
 		return
 	}
+
 	if err.errorType == errorTypeController {
 		ctx.Output.SetStatus(code)
 		//Invoke the request handler

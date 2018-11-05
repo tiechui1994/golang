@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"fmt"
 	"path/filepath"
+	"os"
 )
 
 func splitSegment(key string) (bool, []string, string) {
@@ -175,4 +176,13 @@ func main() {
 
 	fmt.Println(filepath.Join(filepath.Dir("../"), "yy"))
 	fmt.Println(filepath.Abs("../"))
+	var (
+		AppPath string
+		err     error
+	)
+	if AppPath, err = filepath.Abs(filepath.Dir(os.Args[0])); err != nil {
+		panic(err)
+	}
+	fmt.Println(AppPath)
+	fmt.Println(os.Getwd())
 }

@@ -15,25 +15,24 @@ import (
 	"github.com/astaxie/beego/utils"
 )
 
-// Config is the main struct for BConfig
+// Beego的配置信息
 type Config struct {
-	AppName             string //Application name
-	RunMode             string //Running Mode: dev | prod
-	RouterCaseSensitive bool
-	ServerName          string
-	RecoverPanic        bool
-	RecoverFunc         func(*context.Context)
-	CopyRequestBody     bool
+	AppName             string
+	RunMode             string                 // 运行模式: dev | prod
+	RouterCaseSensitive bool                   // 路由是否大小写敏感
+	ServerName          string                 // Header参数(Server)
+	RecoverPanic        bool                   // 默认是true, 启用panic的recover机制
+	RecoverFunc         func(*context.Context) // 当RecoverPanic为True的时候起效
+	CopyRequestBody     bool                   // ???
 	EnableGzip          bool
-	MaxMemory           int64
-	EnableErrorsShow    bool
-	EnableErrorsRender  bool
-	Listen              Listen
-	WebConfig           WebConfig
-	Log                 LogConfig
+	MaxMemory           int64     // 内存限制
+	EnableErrorsShow    bool      // EnableErrorsShow, 展示错误()
+	EnableErrorsRender  bool      // EnableErrorsRender, 渲染错误()
+	Listen              Listen    // 监听配置, http/https
+	WebConfig           WebConfig // Web配置, Web相关, Session, Render
+	Log                 LogConfig // Log配置, 日志相关
 }
 
-// Listen holds for http and https related config
 type Listen struct {
 	Graceful          bool // Graceful means use graceful module to start the server
 	ServerTimeOut     int64
@@ -58,7 +57,6 @@ type Listen struct {
 	EnableStdIo       bool // EnableStdIo works with EnableFcgi Use FCGI via standard I/O
 }
 
-// WebConfig holds web related config
 type WebConfig struct {
 	AutoRender             bool
 	EnableDocs             bool
@@ -76,7 +74,6 @@ type WebConfig struct {
 	Session                SessionConfig
 }
 
-// SessionConfig holds session related config
 type SessionConfig struct {
 	SessionOn                    bool
 	SessionProvider              string
@@ -92,34 +89,32 @@ type SessionConfig struct {
 	SessionEnableSidInURLQuery   bool // enable get the sessionId from Url Query params
 }
 
-// LogConfig holds Log related config
 type LogConfig struct {
 	AccessLogs       bool
-	EnableStaticLogs bool   //log static files requests default: false
-	AccessLogsFormat string //access log format: JSON_FORMAT, APACHE_FORMAT or empty string
+	EnableStaticLogs bool   // log static files requests default: false
+	AccessLogsFormat string // access log format: JSON_FORMAT, APACHE_FORMAT or empty string
 	FileLineNum      bool
 	Outputs          map[string]string // Store Adaptor : config
 }
 
 var (
-	// BConfig is the default config for Application
-	BConfig *Config
-	// AppConfig is the instance of Config, store the config information from file
-	AppConfig *beegoAppConfig
-	// AppPath is the absolute path to the app
-	AppPath string
-	// GlobalSessions is the instance for the session manager
-	GlobalSessions *session.Manager
+	BConfig        *Config          // BConfig是app默认配置
+	AppConfig      *beegoAppConfig  // AppConfig是Config的实例,存储来自文件的配置信息
+	AppPath        string           // app的绝对路径(目录: 命令文件的目录)
+	GlobalSessions *session.Manager // 全局Session管理
 
-	// appConfigPath is the path to the config files
-	appConfigPath string
-	// appConfigProvider is the provider for the config, default is ini
-	appConfigProvider = "ini"
+	appConfigPath     string  // app配置文件的路径(目录: 启动命令的目录)
+	appConfigProvider = "ini" // app配置文件的默认解析引擎
 )
 
 func init() {
+	var (
+		err      error
+		filename = "app.conf"
+	)
+
 	BConfig = newBConfig()
-	var err error
+	// AppPath, 命令目录
 	if AppPath, err = filepath.Abs(filepath.Dir(os.Args[0])); err != nil {
 		panic(err)
 	}
@@ -127,56 +122,21 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	var filename = "app.conf"
 	if os.Getenv("BEEGO_RUNMODE") != "" {
 		filename = os.Getenv("BEEGO_RUNMODE") + ".app.conf"
 	}
-	appConfigPath = filepath.Join(workPath, "conf", filename)
+	appConfigPath = filepath.Join(workPath, "conf", filename) // 默认的配置文件: ./conf/{dev|prod}.app.conf
 	if !utils.FileExists(appConfigPath) {
-		appConfigPath = filepath.Join(AppPath, "conf", filename)
+		appConfigPath = filepath.Join(AppPath, "conf", filename) // {AppPath}/conf/{dev|prod}.app.conf; dev,prod可选
 		if !utils.FileExists(appConfigPath) {
 			AppConfig = &beegoAppConfig{innerConfig: config.NewFakeConfig()}
 			return
 		}
 	}
+
+	// 解析APP的配置文件 -> 初始化BConfig
 	if err = parseConfig(appConfigPath); err != nil {
 		panic(err)
-	}
-}
-
-func recoverPanic(ctx *context.Context) {
-	if err := recover(); err != nil {
-		if err == ErrAbort {
-			return
-		}
-		if !BConfig.RecoverPanic {
-			panic(err)
-		}
-		if BConfig.EnableErrorsShow {
-			if _, ok := ErrorMaps[fmt.Sprint(err)]; ok {
-				exception(fmt.Sprint(err), ctx)
-				return
-			}
-		}
-		var stack string
-		logs.Critical("the request url is ", ctx.Input.URL())
-		logs.Critical("Handler crashed with error", err)
-		for i := 1; ; i++ {
-			_, file, line, ok := runtime.Caller(i)
-			if !ok {
-				break
-			}
-			logs.Critical(fmt.Sprintf("%s:%d", file, line))
-			stack = stack + fmt.Sprintln(fmt.Sprintf("%s:%d", file, line))
-		}
-		if BConfig.RunMode == DEV && BConfig.EnableErrorsRender {
-			showErr(err, ctx, stack)
-		}
-		if ctx.Output.Status != 0 {
-			ctx.ResponseWriter.WriteHeader(ctx.Output.Status)
-		} else {
-			ctx.ResponseWriter.WriteHeader(500)
-		}
 	}
 }
 
@@ -187,10 +147,10 @@ func newBConfig() *Config {
 		RouterCaseSensitive: true,
 		ServerName:          "beegoServer:" + VERSION,
 		RecoverPanic:        true,
-		RecoverFunc:         recoverPanic,
+		RecoverFunc:         recoverPanic, // recover函数
 		CopyRequestBody:     false,
 		EnableGzip:          false,
-		MaxMemory:           1 << 26, //64MB
+		MaxMemory:           1 << 26, // 64MB
 		EnableErrorsShow:    true,
 		EnableErrorsRender:  true,
 		Listen: Listen{
@@ -235,7 +195,7 @@ func newBConfig() *Config {
 				SessionGCMaxLifetime:         3600,
 				SessionProviderConfig:        "",
 				SessionDisableHTTPOnly:       false,
-				SessionCookieLifeTime:        0, //set cookie default is the browser life
+				SessionCookieLifeTime:        0, // set cookie default is the browser life
 				SessionAutoSetCookie:         true,
 				SessionDomain:                "",
 				SessionEnableSidInHTTPHeader: false, // enable store/get the sessionId into/from http headers
@@ -253,7 +213,53 @@ func newBConfig() *Config {
 	}
 }
 
-// now only support ini, next will support json.
+func recoverPanic(ctx *context.Context) {
+	if err := recover(); err != nil {
+		// 特殊错误
+		if err == ErrAbort {
+			return
+		}
+		if !BConfig.RecoverPanic {
+			panic(err)
+		}
+
+		// web页面显示错误, 默认是true
+		if BConfig.EnableErrorsShow {
+			// ErrorMaps 通用型错误模板, 默认是12个, 7个4x + 5个5x
+			// fmt.Sprint(err)是errCode, 例如404, 500等
+			if _, ok := ErrorMaps[fmt.Sprint(err)]; ok {
+				exception(fmt.Sprint(err), ctx)
+				return
+			}
+		}
+
+		// web页面不显示错误, 进行log记录
+		var stack string
+		logs.Critical("the request url is ", ctx.Input.URL())
+		logs.Critical("Handler crashed with error", err)
+		for i := 1; ; i++ {
+			_, file, line, ok := runtime.Caller(i)
+			if !ok {
+				break
+			}
+			logs.Critical(fmt.Sprintf("%s:%d", file, line)) // 打印出错文件位置
+			stack = stack + fmt.Sprintln(fmt.Sprintf("%s:%d", file, line))
+		}
+
+		// DEV 环境下 且
+		if BConfig.RunMode == DEV && BConfig.EnableErrorsRender {
+			showErr(err, ctx, stack)
+		}
+
+		if ctx.Output.Status != 0 {
+			ctx.ResponseWriter.WriteHeader(ctx.Output.Status)
+		} else {
+			ctx.ResponseWriter.WriteHeader(500)
+		}
+	}
+}
+
+// 解析配置文件
 func parseConfig(appConfigPath string) (err error) {
 	AppConfig, err = newAppConfig(appConfigProvider, appConfigPath)
 	if err != nil {
@@ -362,6 +368,8 @@ func assignSingleConfig(p interface{}, ac config.Configer) {
 	}
 
 }
+
+// --------------------------------------------------------------------------------------------------------
 
 // LoadAppConfig allow developer to apply a config file
 func LoadAppConfig(adapterName, configPath string) error {

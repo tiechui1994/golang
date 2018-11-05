@@ -11,7 +11,7 @@ import (
 	"github.com/astaxie/beego/session"
 )
 
-//
+// 注册Mime, 常用的mime
 func registerMime() error {
 	for k, v := range mimemaps {
 		mime.AddExtensionType(k, v)
@@ -19,7 +19,7 @@ func registerMime() error {
 	return nil
 }
 
-// register default error http handlers, 404,401,403,500 and 503.
+// 注册默认的error Handler, 401, 402, 403, 404, 405, 501, 502, 503, 504, 417, 422
 func registerDefaultErrorHandler() error {
 	m := map[string]func(http.ResponseWriter, *http.Request){
 		"401": unauthorized,
@@ -37,12 +37,13 @@ func registerDefaultErrorHandler() error {
 	}
 	for e, h := range m {
 		if _, ok := ErrorMaps[e]; !ok {
-			ErrorHandler(e, h)
+			ErrorHandler(e, h) // 在ErrorMaps中添加记录
 		}
 	}
 	return nil
 }
 
+// 注册Session, 只有开启Session才会调用
 func registerSession() error {
 	if BConfig.WebConfig.Session.SessionOn {
 		var err error
@@ -73,6 +74,7 @@ func registerSession() error {
 	return nil
 }
 
+// 注册模板
 func registerTemplate() error {
 	defer lockViewPaths()
 	if err := AddViewPath(BConfig.WebConfig.ViewsPath); err != nil {
@@ -84,6 +86,7 @@ func registerTemplate() error {
 	return nil
 }
 
+// 注册Admin
 func registerAdmin() error {
 	if BConfig.Listen.EnableAdmin {
 		go beeAdminApp.Run()
@@ -91,6 +94,7 @@ func registerAdmin() error {
 	return nil
 }
 
+// 注册Gzip
 func registerGzip() error {
 	if BConfig.EnableGzip {
 		context.InitGzip(
