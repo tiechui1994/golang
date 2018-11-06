@@ -2,12 +2,9 @@ package app
 
 import "github.com/astaxie/beego/context"
 
-// FilterFunc defines a filter function which is invoked before the controller handler is executed.
+// FilterFunc: 过滤器,在controller的handler之前执行
 type FilterFunc func(*context.Context)
 
-// FilterRouter defines a filter operation which is invoked before the controller handler is executed.
-// It can match the URL against a pattern, and execute a filter function
-// when a request with a matching URL arrives.
 type FilterRouter struct {
 	filterFunc     FilterFunc
 	tree           *Tree
@@ -16,9 +13,10 @@ type FilterRouter struct {
 	resetParams    bool
 }
 
-// ValidRouter checks if the current request is matched by this filter.
-// If the request is matched, the values of the URL parameters defined
-// by the filter pattern are also returned.
+/*
+ ValidRouter检查当前请求是否与此过滤器匹配.
+ 如果请求匹配,则还返回由过滤器模式定义的URL参数的值.
+*/
 func (f *FilterRouter) ValidRouter(url string, ctx *context.Context) bool {
 	isOk := f.tree.Match(url, ctx)
 	if isOk != nil {

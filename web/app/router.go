@@ -19,7 +19,11 @@ import (
 	"github.com/astaxie/beego/utils"
 )
 
-// default filter execution points
+/*
+ 路由器, beego的核心组件之一
+*/
+
+// 默认的过滤器执行点
 const (
 	BeforeStatic = iota
 	BeforeRouter
@@ -28,6 +32,7 @@ const (
 	FinishRouter
 )
 
+// 路由类型
 const (
 	routerTypeBeego   = iota
 	routerTypeRESTFul
@@ -35,7 +40,7 @@ const (
 )
 
 var (
-	// HTTPMETHOD list the supported http methods.
+	// HTTP的请求类型
 	HTTPMETHOD = map[string]bool{
 		"GET":       true,
 		"POST":      true,
@@ -54,7 +59,8 @@ var (
 		"LOCK":      true,
 		"UNLOCK":    true,
 	}
-	// these beego.Controller's methods shouldn't reflect to AutoRouter
+
+	// beego.Controller 默认自带的方法
 	exceptMethod = []string{"Init", "Prepare", "Finish", "Render", "RenderString",
 		"RenderBytes", "Redirect", "Abort", "StopRun", "UrlFor", "ServeJSON", "ServeJSONP",
 		"ServeYAML", "ServeXML", "Input", "ParseForm", "GetString", "GetStrings", "GetInt", "GetBool",
@@ -64,60 +70,63 @@ var (
 		"GetControllerAndAction", "ServeFormatted"}
 
 	urlPlaceholder = "{{placeholder}}"
-	// DefaultAccessLogFilter will skip the accesslog if return true
+	// 如果返回true,DefaultAccessLogFilter将跳过accesslog
 	DefaultAccessLogFilter FilterHandler = &logFilter{}
 )
 
-// FilterHandler is an interface for
 type FilterHandler interface {
 	Filter(*beecontext.Context) bool
 }
 
-// default log filter static file will not show
-type logFilter struct {
-}
+// 日志过滤器: 在某些特殊请求和静态资源请求不需要在access当中记录
+type logFilter struct{}
 
 func (l *logFilter) Filter(ctx *beecontext.Context) bool {
-	requestPath := path.Clean(ctx.Request.URL.Path)
+	requestPath := path.Clean(ctx.Request.URL.Path) // 获取同目录的最短路径
+	// 特殊请求
 	if requestPath == "/favicon.ico" || requestPath == "/robots.txt" {
 		return true
 	}
+
+	// 静态资源请求
 	for prefix := range BConfig.WebConfig.StaticDir {
 		if strings.HasPrefix(requestPath, prefix) {
 			return true
 		}
 	}
+
 	return false
 }
 
-// ExceptMethodAppend to append a slice's value into "exceptMethod", for controller's methods shouldn't reflect to AutoRouter
+//------------------------------------------------------------------------------------------
+
+// 增加Controller方法, 这些方法不需要通过反射获取
 func ExceptMethodAppend(action string) {
 	exceptMethod = append(exceptMethod, action)
 }
 
-// ControllerInfo holds information about the controller.
+// 存储Controller的一些信息
 type ControllerInfo struct {
 	pattern        string
-	controllerType reflect.Type
-	methods        map[string]string
+	controllerType reflect.Type      // 通过此参数可以获取到Controller的所有方法
+	methods        map[string]string // 请求类型 : 方法名称
 	handler        http.Handler
 	runFunction    FilterFunc
-	routerType     int
+	routerType     int // 默认是routerTypeBeego
 	initialize     func() ControllerInterface
 	methodParams   []*param.MethodParam
 }
 
-// ControllerRegister containers registered router rules, controller handlers and filters.
+// Controller容器, 存储注册的router rule, controller handler and filter
 type ControllerRegister struct {
-	routers      map[string]*Tree
+	routers      map[string]*Tree // 路由器
 	enablePolicy bool
-	policies     map[string]*Tree
+	policies     map[string]*Tree // ???
 	enableFilter bool
 	filters      [FinishRouter + 1][]*FilterRouter
-	pool         sync.Pool
+	pool         sync.Pool // Context池
 }
 
-// NewControllerRegister returns a new ControllerRegister.
 func NewControllerRegister() *ControllerRegister {
 	cr := &ControllerRegister{
 		routers:  make(map[string]*Tree),
@@ -143,32 +152,43 @@ func (p *ControllerRegister) Add(pattern string, c ControllerInterface, mappingM
 	p.addWithMethodParams(pattern, c, nil, mappingMethods...)
 }
 
+/*
+向Controller当中添加Method
+pattern: url路由
+c: Controller
+methodParams: 参数
+mappingMethods: 方法映射, "TYPE:METHOD", 例如: "post:postFunc;get,post:func"
+*/
 func (p *ControllerRegister) addWithMethodParams(pattern string, c ControllerInterface, methodParams []*param.MethodParam, mappingMethods ...string) {
-	reflectVal := reflect.ValueOf(c)
+	reflectVal := reflect.ValueOf(c) // 获取c的真实对象(该对象实现了ControllerInterface)
+	// value是一个指针,这里获取了该指针指向的值,相当于value.Elem()
+	// value = reflect.Indirect(value)
 	t := reflect.Indirect(reflectVal).Type()
-	methods := make(map[string]string)
+	methods := make(map[string]string) // 请求类型:方法名称
+
 	if len(mappingMethods) > 0 {
-		semi := strings.Split(mappingMethods[0], ";")
+		semi := strings.Split(mappingMethods[0], ";") // 切割产生映射
 		for _, v := range semi {
-			colon := strings.Split(v, ":")
+			colon := strings.Split(v, ":") // 切割产生请求类型, 方法
 			if len(colon) != 2 {
-				panic("method mapping format is invalid")
+				panic("method mapping format is invalid") // 映射混乱
 			}
-			comma := strings.Split(colon[0], ",")
+			comma := strings.Split(colon[0], ",") // 一个方法共用多个请求类型
 			for _, m := range comma {
 				if m == "*" || HTTPMETHOD[strings.ToUpper(m)] {
 					if val := reflectVal.MethodByName(colon[1]); val.IsValid() {
 						methods[strings.ToUpper(m)] = colon[1]
 					} else {
-						panic("'" + colon[1] + "' method doesn't exist in the controller " + t.Name())
+						panic("'" + colon[1] + "' method doesn't exist in the controller " + t.Name()) // Controller的私有方法
 					}
 				} else {
-					panic(v + " is an invalid method mapping. Method doesn't exist " + m)
+					panic(v + " is an invalid method mapping. Method doesn't exist " + m) // 请求类型不存在, 或请求类型非法
 				}
 			}
 		}
 	}
 
+	// 构建ControllerInfo
 	route := &ControllerInfo{}
 	route.pattern = pattern
 	route.methods = methods
@@ -216,6 +236,7 @@ func (p *ControllerRegister) addWithMethodParams(pattern string, c ControllerInt
 	}
 }
 
+// 添加路由
 func (p *ControllerRegister) addToRouter(method, pattern string, r *ControllerInfo) {
 	if !BConfig.RouterCaseSensitive {
 		pattern = strings.ToLower(pattern)

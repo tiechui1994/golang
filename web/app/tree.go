@@ -13,10 +13,12 @@ var (
 	allowSuffixExt = []string{".json", ".xml", ".html"}
 )
 
-// Tree有三种元素: FixRouter / wildcard / leaves
-// fixRouter存储固定路由器
-// wildcard存储参数
-// leaves存储端点信息
+/*
+ Tree有三种元素: FixRouter / wildcard / leaves
+ fixRouter存储固定路由器
+ wildcard存储参数
+ leaves存储端点信息
+*/
 type Tree struct {
 	prefix     string      // 静态路由
 	fixrouters []*Tree     // 首先匹配的是固定路由
@@ -479,7 +481,7 @@ func splitPath(key string) []string {
 "*.*" -> true,[. :path :ext], ""      . meaning separator
 *************************************************************************/
 
-/**
+/*
 返回值说明:
 bool, 是否是正则表达式
 []string, 分组数组

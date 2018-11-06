@@ -26,35 +26,6 @@ var (
 	beeTemplateEngines        = map[string]templatePreProcessor{} // 存储的是扩展名对应的解析函数, extension -> preprocessor
 )
 
-// 模板解析
-func ExecuteTemplate(wr io.Writer, name string, data interface{}) error {
-	return ExecuteViewPathTemplate(wr, name, BConfig.WebConfig.ViewsPath, data)
-}
-
-func ExecuteViewPathTemplate(wr io.Writer, name string, viewPath string, data interface{}) error {
-	if BConfig.RunMode == DEV {
-		templatesLock.RLock()
-		defer templatesLock.RUnlock()
-	}
-
-	if beeTemplates, ok := beeViewPathTemplates[viewPath]; ok {
-		if t, ok := beeTemplates[name]; ok {
-			var err error
-			if t.Lookup(name) != nil { // 模板查找
-				err = t.ExecuteTemplate(wr, name, data) // 特定模板渲染
-			} else {
-				err = t.Execute(wr, data)
-			}
-			if err != nil {
-				logs.Trace("template Execute err:", err)
-			}
-			return err
-		}
-		panic("can't find templatefile in the path:" + viewPath + "/" + name)
-	}
-	panic("Unknown view path:" + viewPath)
-}
-
 func init() {
 	beegoTplFuncMap["dateformat"] = DateFormat
 	beegoTplFuncMap["date"] = Date
@@ -84,11 +55,27 @@ func init() {
 	beegoTplFuncMap["urlfor"] = URLFor // build a URL to match a Controller and it's method
 }
 
-// 用户注册模板函数
-func AddFuncMap(key string, fn interface{}) error {
-	beegoTplFuncMap[key] = fn
-	return nil
+//---------------------------------------------------------------------------------------------------------------
+
+// 注册函数:
+// 此方法必须在 beego.Run() 之前调用, 否则可能产生panic
+func AddViewPath(viewPath string) error {
+	if beeViewPathTemplateLocked { // 在beego.Run()之前设置
+		if _, exist := beeViewPathTemplates[viewPath]; exist {
+			return nil
+		}
+		panic("Can not add new view paths after beego.Run()")
+	}
+	beeViewPathTemplates[viewPath] = make(map[string]*template.Template)
+	return BuildTemplate(viewPath)
 }
+
+// beego.Run() 之前调用.
+func lockViewPaths() {
+	beeViewPathTemplateLocked = true
+}
+
+//---------------------------------------------------------------------------------------------------------------
 
 type templatePreProcessor func(root, path string, funcs template.FuncMap) (*template.Template, error)
 
@@ -122,6 +109,41 @@ func (tf *templateFile) visit(paths string, f os.FileInfo, err error) error {
 	return nil
 }
 
+// 模板解析
+func ExecuteTemplate(wr io.Writer, name string, data interface{}) error {
+	return ExecuteViewPathTemplate(wr, name, BConfig.WebConfig.ViewsPath, data)
+}
+
+func ExecuteViewPathTemplate(wr io.Writer, name string, viewPath string, data interface{}) error {
+	if BConfig.RunMode == DEV {
+		templatesLock.RLock()
+		defer templatesLock.RUnlock()
+	}
+
+	if beeTemplates, ok := beeViewPathTemplates[viewPath]; ok {
+		if t, ok := beeTemplates[name]; ok {
+			var err error
+			if t.Lookup(name) != nil { // 模板查找
+				err = t.ExecuteTemplate(wr, name, data) // 特定模板渲染
+			} else {
+				err = t.Execute(wr, data)
+			}
+			if err != nil {
+				logs.Trace("template Execute err:", err)
+			}
+			return err
+		}
+		panic("can't find templatefile in the path:" + viewPath + "/" + name)
+	}
+	panic("Unknown view path:" + viewPath)
+}
+
+// 用户注册模板函数
+func AddFuncMap(key string, fn interface{}) error {
+	beegoTplFuncMap[key] = fn
+	return nil
+}
+
 // 检测文件的扩展名
 func HasTemplateExt(paths string) bool {
 	for _, v := range beeTemplateExt {
@@ -140,24 +162,6 @@ func AddTemplateExt(ext string) {
 		}
 	}
 	beeTemplateExt = append(beeTemplateExt, ext)
-}
-
-// 增加新的viewPath
-// 此方法必须在 beego.Run() 之前调用, 否则可能产生panic
-func AddViewPath(viewPath string) error {
-	if beeViewPathTemplateLocked { // 在beego.Run()之前设置
-		if _, exist := beeViewPathTemplates[viewPath]; exist {
-			return nil
-		}
-		panic("Can not add new view paths after beego.Run()")
-	}
-	beeViewPathTemplates[viewPath] = make(map[string]*template.Template)
-	return BuildTemplate(viewPath)
-}
-
-// beego.Run() 之前调用.
-func lockViewPaths() {
-	beeViewPathTemplateLocked = true
 }
 
 // build 给定目录下模板文件
