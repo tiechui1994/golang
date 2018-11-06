@@ -112,14 +112,14 @@ type ControllerInfo struct {
 	methods        map[string]string // 请求类型 : 方法名称
 	handler        http.Handler
 	runFunction    FilterFunc
-	routerType     int // 默认是routerTypeBeego
-	initialize     func() ControllerInterface
+	routerType     int                        // 默认是routerTypeBeego
+	initialize     func() ControllerInterface // 初始化函数
 	methodParams   []*param.MethodParam
 }
 
 // Controller容器, 存储注册的router rule, controller handler and filter
 type ControllerRegister struct {
-	routers      map[string]*Tree // 路由器
+	routers      map[string]*Tree // 请求类型 : 路由Tree
 	enablePolicy bool
 	policies     map[string]*Tree // ???
 	enableFilter bool
@@ -138,16 +138,16 @@ func NewControllerRegister() *ControllerRegister {
 	return cr
 }
 
-// Add controller handler and pattern rules to ControllerRegister.
-// usage:
-//	default methods is the same name as method
-//	Add("/user",&UserController{})
-//	Add("/api/list",&RestController{},"*:ListFood")
-//	Add("/api/create",&RestController{},"post:CreateFood")
-//	Add("/api/update",&RestController{},"put:UpdateFood")
-//	Add("/api/delete",&RestController{},"delete:DeleteFood")
-//	Add("/api",&RestController{},"get,post:ApiFunc"
-//	Add("/simple",&SimpleController{},"get:GetFunc;post:PostFunc")
+/*
+	向ControllerRegister当中添加路由
+	Add("/user", &UserController{})
+	Add("/api/list", &RestController{}, "*:ListFood")
+	Add("/api/create", &RestController{}, "post:CreateFood")
+	Add("/api/update", &RestController{}, "put:UpdateFood")
+	Add("/api/delete", &RestController{}, "delete:DeleteFood")
+	Add("/api", &RestController{}, "get,post:ApiFunc"
+	Add("/simple", &SimpleController{}, "get:GetFunc;post:PostFunc")
+*/
 func (p *ControllerRegister) Add(pattern string, c ControllerInterface, mappingMethods ...string) {
 	p.addWithMethodParams(pattern, c, nil, mappingMethods...)
 }
@@ -155,16 +155,19 @@ func (p *ControllerRegister) Add(pattern string, c ControllerInterface, mappingM
 /*
 向Controller当中添加Method
 pattern: url路由
-c: Controller
+c: Controller实例, 必须是一个指针实例
 methodParams: 参数
 mappingMethods: 方法映射, "TYPE:METHOD", 例如: "post:postFunc;get,post:func"
 */
-func (p *ControllerRegister) addWithMethodParams(pattern string, c ControllerInterface, methodParams []*param.MethodParam, mappingMethods ...string) {
-	reflectVal := reflect.ValueOf(c) // 获取c的真实对象(该对象实现了ControllerInterface)
-	// value是一个指针,这里获取了该指针指向的值,相当于value.Elem()
-	// value = reflect.Indirect(value)
-	t := reflect.Indirect(reflectVal).Type()
-	methods := make(map[string]string) // 请求类型:方法名称
+func (p *ControllerRegister) addWithMethodParams(pattern string, controller ControllerInterface, methodParams []*param.MethodParam, mappingMethods ...string) {
+	/*
+	  value是一个指针,这里获取了该指针指向的值,相当于value.Elem()
+	  value = reflect.Indirect(value)
+	*/
+
+	ctrVal := reflect.ValueOf(controller)      // 获取c的真实对象(该对象实现了ControllerInterface)
+	ctrType := reflect.Indirect(ctrVal).Type() // 获取c的真实Struct
+	methods := make(map[string]string)         // 请求类型:方法名称
 
 	if len(mappingMethods) > 0 {
 		semi := strings.Split(mappingMethods[0], ";") // 切割产生映射
@@ -176,7 +179,7 @@ func (p *ControllerRegister) addWithMethodParams(pattern string, c ControllerInt
 			comma := strings.Split(colon[0], ",") // 一个方法共用多个请求类型
 			for _, m := range comma {
 				if m == "*" || HTTPMETHOD[strings.ToUpper(m)] {
-					if val := reflectVal.MethodByName(colon[1]); val.IsValid() {
+					if val := ctrVal.MethodByName(colon[1]); val.IsValid() {
 						methods[strings.ToUpper(m)] = colon[1]
 					} else {
 						panic("'" + colon[1] + "' method doesn't exist in the controller " + t.Name()) // Controller的私有方法
@@ -193,22 +196,24 @@ func (p *ControllerRegister) addWithMethodParams(pattern string, c ControllerInt
 	route.pattern = pattern
 	route.methods = methods
 	route.routerType = routerTypeBeego
-	route.controllerType = t
+	route.controllerType = ctrType
+
+	// 创建一个执行的执行的Controller实例
 	route.initialize = func() ControllerInterface {
-		vc := reflect.New(route.controllerType)
-		execController, ok := vc.Interface().(ControllerInterface)
+		execType := reflect.New(route.controllerType)
+		execController, ok := execType.Interface().(ControllerInterface) // 获取真实的Controller实例
 		if !ok {
 			panic("controller is not ControllerInterface")
 		}
 
-		elemVal := reflect.ValueOf(c).Elem()
-		elemType := reflect.TypeOf(c).Elem()
-		execElem := reflect.ValueOf(execController).Elem()
+		elemVal := reflect.ValueOf(controller).Elem()      // Controller值
+		elemType := reflect.TypeOf(controller).Elem()      // Controller类型
+		execElem := reflect.ValueOf(execController).Elem() // 执行Controller
 
 		numOfFields := elemVal.NumField()
 		for i := 0; i < numOfFields; i++ {
 			fieldType := elemType.Field(i)
-			elemField := execElem.FieldByName(fieldType.Name)
+			elemField := execElem.FieldByName(fieldType.Name) // 获取Field
 			if elemField.CanSet() {
 				fieldVal := elemVal.Field(i)
 				elemField.Set(fieldVal)
@@ -219,11 +224,11 @@ func (p *ControllerRegister) addWithMethodParams(pattern string, c ControllerInt
 	}
 
 	route.methodParams = methodParams
-	if len(methods) == 0 {
+	if len(methods) == 0 { // Controller没有添加新的方法
 		for m := range HTTPMETHOD {
 			p.addToRouter(m, pattern, route)
 		}
-	} else {
+	} else { // Controller添加了新的方法
 		for k := range methods {
 			if k == "*" {
 				for m := range HTTPMETHOD {
@@ -237,51 +242,60 @@ func (p *ControllerRegister) addWithMethodParams(pattern string, c ControllerInt
 }
 
 // 添加路由
+// method: 为请求类型
+// pattern: 路由
+// r: 存储Controller有效信息
 func (p *ControllerRegister) addToRouter(method, pattern string, r *ControllerInfo) {
+	// 路由不忽略大小写时, 路由全部保存为小写
 	if !BConfig.RouterCaseSensitive {
 		pattern = strings.ToLower(pattern)
 	}
+
 	if t, ok := p.routers[method]; ok {
 		t.AddRouter(pattern, r)
 	} else {
-		t := NewTree()
-		t.AddRouter(pattern, r)
-		p.routers[method] = t
+		tree := NewTree()
+		tree.AddRouter(pattern, r)
+		p.routers[method] = tree
 	}
 }
 
-// Include only when the Runmode is dev will generate router file in the router/auto.go from the controller
+// 对于运行模式是DEV, 会自动生成路由文件 router/auto.go
 // Include(&BankAccount{}, &OrderController{},&RefundController{},&ReceiptController{})
-func (p *ControllerRegister) Include(cList ...ControllerInterface) {
+func (p *ControllerRegister) Include(ctrList ...ControllerInterface) {
 	if BConfig.RunMode == DEV {
 		skip := make(map[string]bool, 10)
-		for _, c := range cList {
-			reflectVal := reflect.ValueOf(c)
-			t := reflect.Indirect(reflectVal).Type()
-			wgopath := utils.GetGOPATHs()
+		for _, c := range ctrList {
+			ctrVal := reflect.ValueOf(c)
+			ctrType := reflect.Indirect(ctrVal).Type()
+
+			wgopath := utils.GetGOPATHs() // 获取GOPATH, 可能是多个目录
 			if len(wgopath) == 0 {
 				panic("you are in dev mode. So please set gopath")
 			}
 			pkgpath := ""
 			for _, wg := range wgopath {
-				wg, _ = filepath.EvalSymlinks(filepath.Join(wg, "src", t.PkgPath()))
+				// filepath.EvalSymlinks() 判断文件或文件夹是否存在
+				wg, _ = filepath.EvalSymlinks(filepath.Join(wg, "src", ctrType.PkgPath())) // 获取controller的路径
 				if utils.FileExists(wg) {
 					pkgpath = wg
 					break
 				}
 			}
+
 			if pkgpath != "" {
 				if _, ok := skip[pkgpath]; !ok {
 					skip[pkgpath] = true
-					parserPkg(pkgpath, t.PkgPath())
+					parserPkg(pkgpath, ctrType.PkgPath()) // 解析ctr, 路由生成
 				}
 			}
 		}
 	}
-	for _, c := range cList {
-		reflectVal := reflect.ValueOf(c)
-		t := reflect.Indirect(reflectVal).Type()
-		key := t.PkgPath() + ":" + t.Name()
+
+	for _, c := range ctrList {
+		ctrVal := reflect.ValueOf(c)
+		ctrType := reflect.Indirect(ctrVal).Type()
+		key := ctrType.PkgPath() + ":" + ctrType.Name()
 		if comm, ok := GlobalControllerRouter[key]; ok {
 			for _, a := range comm {
 				p.addWithMethodParams(a.Router, c, a.MethodParams, strings.Join(a.AllowHTTPMethods, ",")+":"+a.Method)
@@ -290,83 +304,39 @@ func (p *ControllerRegister) Include(cList ...ControllerInterface) {
 	}
 }
 
-// Get add get method
-// usage:
-//    Get("/", func(ctx *context.Context){
-//          ctx.Output.Body("hello world")
-//    })
+
 func (p *ControllerRegister) Get(pattern string, f FilterFunc) {
 	p.AddMethod("get", pattern, f)
 }
 
-// Post add post method
-// usage:
-//    Post("/api", func(ctx *context.Context){
-//          ctx.Output.Body("hello world")
-//    })
 func (p *ControllerRegister) Post(pattern string, f FilterFunc) {
 	p.AddMethod("post", pattern, f)
 }
 
-// Put add put method
-// usage:
-//    Put("/api/:id", func(ctx *context.Context){
-//          ctx.Output.Body("hello world")
-//    })
 func (p *ControllerRegister) Put(pattern string, f FilterFunc) {
 	p.AddMethod("put", pattern, f)
 }
 
-// Delete add delete method
-// usage:
-//    Delete("/api/:id", func(ctx *context.Context){
-//          ctx.Output.Body("hello world")
-//    })
 func (p *ControllerRegister) Delete(pattern string, f FilterFunc) {
 	p.AddMethod("delete", pattern, f)
 }
 
-// Head add head method
-// usage:
-//    Head("/api/:id", func(ctx *context.Context){
-//          ctx.Output.Body("hello world")
-//    })
 func (p *ControllerRegister) Head(pattern string, f FilterFunc) {
 	p.AddMethod("head", pattern, f)
 }
 
-// Patch add patch method
-// usage:
-//    Patch("/api/:id", func(ctx *context.Context){
-//          ctx.Output.Body("hello world")
-//    })
 func (p *ControllerRegister) Patch(pattern string, f FilterFunc) {
 	p.AddMethod("patch", pattern, f)
 }
 
-// Options add options method
-// usage:
-//    Options("/api/:id", func(ctx *context.Context){
-//          ctx.Output.Body("hello world")
-//    })
 func (p *ControllerRegister) Options(pattern string, f FilterFunc) {
 	p.AddMethod("options", pattern, f)
 }
 
-// Any add all method
-// usage:
-//    Any("/api/:id", func(ctx *context.Context){
-//          ctx.Output.Body("hello world")
-//    })
 func (p *ControllerRegister) Any(pattern string, f FilterFunc) {
 	p.AddMethod("*", pattern, f)
 }
 
-// AddMethod add http method router
-// usage:
-//    AddMethod("get","/api/:id", func(ctx *context.Context){
-//          ctx.Output.Body("hello world")
-//    })
 func (p *ControllerRegister) AddMethod(method, pattern string, f FilterFunc) {
 	method = strings.ToUpper(method)
 	if method != "*" && !HTTPMETHOD[method] {
