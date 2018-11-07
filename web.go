@@ -4,8 +4,8 @@ import (
 	"strings"
 	"regexp"
 	"fmt"
-	"path/filepath"
-	"os"
+	"reflect"
+	"path"
 )
 
 func splitSegment(key string) (bool, []string, string) {
@@ -166,23 +166,14 @@ func TestSplitSegment() {
 	}
 }
 
+type SiteController struct {
+	Name string
+}
+
 func main() {
-	mp := make(map[string]map[string]int)
+	site := SiteController{}
 
-	mp["1"] = map[string]int{"001": 100}
-	oo := mp["1"]
-	oo["002"] = 120
-	fmt.Println(mp)
+	siteType := reflect.TypeOf(site)
 
-	fmt.Println(filepath.Join(filepath.Dir("../"), "yy"))
-	fmt.Println(filepath.Abs("../"))
-	var (
-		AppPath string
-		err     error
-	)
-	if AppPath, err = filepath.Abs(filepath.Dir(os.Args[0])); err != nil {
-		panic(err)
-	}
-	fmt.Println(AppPath)
-	fmt.Println(os.Getwd())
+	fmt.Println(path.Join(siteType.PkgPath(), siteType.Name()))
 }

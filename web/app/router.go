@@ -512,26 +512,41 @@ func (p *ControllerRegister) URLFor(endpoint string, values ...interface{}) stri
 	return ""
 }
 
-func (p *ControllerRegister) geturl(t *Tree, url, controllName, methodName string, params map[string]string, httpMethod string) (bool, string) {
-	for _, subtree := range t.fixrouters {
-		u := path.Join(url, subtree.prefix)
-		ok, u := p.geturl(subtree, u, controllName, methodName, params, httpMethod)
+/*
+tree: 搜索树
+url:
+controllerName:
+methodName:
+params:
+httpMethod
+*/
+func (p *ControllerRegister) geturl(tree *Tree, url, controllerName, methodName string, params map[string]string, httpMethod string) (bool, string) {
+	// 固定路由匹配
+	for _, subtree := range tree.fixrouters {
+		newUrl := path.Join(url, subtree.prefix)
+		ok, u := p.geturl(subtree, newUrl, controllerName, methodName, params, httpMethod)
 		if ok {
 			return ok, u
 		}
 	}
-	if t.wildcard != nil {
-		u := path.Join(url, urlPlaceholder)
-		ok, u := p.geturl(t.wildcard, u, controllName, methodName, params, httpMethod)
+
+	// 固定路由匹配失败, wildcard匹配
+	if tree.wildcard != nil {
+		newUrl := path.Join(url, urlPlaceholder)
+		ok, u := p.geturl(tree.wildcard, newUrl, controllerName, methodName, params, httpMethod)
 		if ok {
 			return ok, u
 		}
 	}
-	for _, l := range t.leaves {
+
+	// wildcard匹配失败, 叶子节点匹配
+	for _, l := range tree.leaves {
 		if c, ok := l.runObject.(*ControllerInfo); ok {
+			// 只查找 routerTypeBeego 类型的路由
 			if c.routerType == routerTypeBeego &&
-				strings.HasSuffix(path.Join(c.controllerType.PkgPath(), c.controllerType.Name()), controllName) {
+				strings.HasSuffix(path.Join(c.controllerType.PkgPath(), c.controllerType.Name()), controllerName) {
 				find := false
+
 				if HTTPMETHOD[strings.ToUpper(methodName)] {
 					if len(c.methods) == 0 {
 						find = true
@@ -541,6 +556,7 @@ func (p *ControllerRegister) geturl(t *Tree, url, controllName, methodName strin
 						find = true
 					}
 				}
+
 				if !find {
 					for m, md := range c.methods {
 						if (m == "*" || m == httpMethod) && md == methodName {
@@ -548,6 +564,7 @@ func (p *ControllerRegister) geturl(t *Tree, url, controllName, methodName strin
 						}
 					}
 				}
+
 				if find {
 					if l.regexps == nil {
 						if len(l.wildcards) == 0 {

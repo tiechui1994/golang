@@ -378,13 +378,9 @@ func (t *Tree) match(treePattern string, pattern string, wildcardValues []string
 }
 
 type leafInfo struct {
-	// names of wildcards that lead to this leaf. eg, ["id" "name"] for the wildcard ":id" and ":name"
-	wildcards []string
-
-	// if the leaf is regexp
-	regexps *regexp.Regexp
-
-	runObject interface{}
+	wildcards []string       // wildcards参数, eg, ["id" "name"] for the wildcard ":id" and ":name"
+	regexps   *regexp.Regexp // leaf是正则表达式
+	runObject interface{}    // ControllerInfo
 }
 
 func (leaf *leafInfo) match(treePattern string, wildcardValues []string, ctx *context.Context) (ok bool) {
