@@ -107,14 +107,14 @@ func ExceptMethodAppend(action string) {
 
 // 存储Controller的一些信息
 type ControllerInfo struct {
-	pattern        string
+	pattern        string            // 路由
 	controllerType reflect.Type      // 通过此参数可以获取到Controller的所有方法
 	methods        map[string]string // 请求类型 : 方法名称
-	handler        http.Handler
-	runFunction    FilterFunc
-	routerType     int                        // 默认是routerTypeBeego
-	initialize     func() ControllerInterface // 初始化函数
-	methodParams   []*param.MethodParam
+	handler        http.Handler      // request, response 为参数的函数
+	runFunction    FilterFunc        // context为参数的函数
+	routerType     int
+	initialize     func() ControllerInterface // 初始化函数(可选)
+	methodParams   []*param.MethodParam       // 方法参数(可选)
 }
 
 // Controller容器, 存储注册的router rule, controller handler and filter
@@ -304,7 +304,6 @@ func (p *ControllerRegister) Include(ctrList ...ControllerInterface) {
 	}
 }
 
-
 func (p *ControllerRegister) Get(pattern string, f FilterFunc) {
 	p.AddMethod("get", pattern, f)
 }
@@ -337,11 +336,14 @@ func (p *ControllerRegister) Any(pattern string, f FilterFunc) {
 	p.AddMethod("*", pattern, f)
 }
 
+// 添加路由: request, response
 func (p *ControllerRegister) AddMethod(method, pattern string, f FilterFunc) {
 	method = strings.ToUpper(method)
 	if method != "*" && !HTTPMETHOD[method] {
 		panic("not support http method: " + method)
 	}
+
+	// 构建路由
 	route := &ControllerInfo{}
 	route.pattern = pattern
 	route.routerType = routerTypeRESTFul
@@ -355,6 +357,8 @@ func (p *ControllerRegister) AddMethod(method, pattern string, f FilterFunc) {
 		methods[method] = method
 	}
 	route.methods = methods
+
+	// 路由注册
 	for k := range methods {
 		if k == "*" {
 			for m := range HTTPMETHOD {
@@ -366,47 +370,58 @@ func (p *ControllerRegister) AddMethod(method, pattern string, f FilterFunc) {
 	}
 }
 
-// Handler add user defined Handler
+// 添加路由: Context
 func (p *ControllerRegister) Handler(pattern string, h http.Handler, options ...interface{}) {
 	route := &ControllerInfo{}
 	route.pattern = pattern
 	route.routerType = routerTypeHandler
 	route.handler = h
+
+	// options是补充路由
 	if len(options) > 0 {
 		if _, ok := options[0].(bool); ok {
 			pattern = path.Join(pattern, "?:all(.*)")
 		}
 	}
+
+	// 这里的method是全部的HTTPMETHOD
 	for m := range HTTPMETHOD {
 		p.addToRouter(m, pattern, route)
 	}
 }
 
-// AddAuto router to ControllerRegister.
-// example beego.AddAuto(&MainContorlller{}),
-// MainController has method List and Page.
-// visit the url /main/list to execute List function
-// /main/page to execute Page function.
+/*
+ 自动添加路由:
+ 例如: beego.AddAuto(&MainContorlller{}), MainController有方法List()和Page().
+ 访问 url /main/list 则执行MainController的List()方法,
+ 访问 url /main/page 则执行MainController的Page()方法.
+*/
 func (p *ControllerRegister) AddAuto(c ControllerInterface) {
 	p.AddAutoPrefix("/", c)
 }
 
-// AddAutoPrefix Add auto router to ControllerRegister with prefix.
-// example beego.AddAutoPrefix("/admin",&MainContorlller{}),
-// MainController has method List and Page.
-// visit the url /admin/main/list to execute List function
-// /admin/main/page to execute Page function.
-func (p *ControllerRegister) AddAutoPrefix(prefix string, c ControllerInterface) {
-	reflectVal := reflect.ValueOf(c)
-	rt := reflectVal.Type()
-	ct := reflect.Indirect(reflectVal).Type()
+/*
+自动添加路由:
+	prefix是路由前缀
+	controller是Controller实例
+	例如: beego.AddAutoPrefix("/admin",&MainContorlller{}), MainContorlller有方法
+	List()和Page()
+
+	请求/admin/main/list, 则执行MainController的List()
+	请求/admin/main/page, 则执行MainController的Page()
+*/
+func (p *ControllerRegister) AddAutoPrefix(prefix string, controller ControllerInterface) {
+	ctrVal := reflect.ValueOf(controller)
+	ct := reflect.Indirect(ctrVal).Type() // 获取controller的Type
+	rt := ctrVal.Type()
 	controllerName := strings.TrimSuffix(ct.Name(), "Controller")
 	for i := 0; i < rt.NumMethod(); i++ {
-		if !utils.InSlice(rt.Method(i).Name, exceptMethod) {
+		if !utils.InSlice(rt.Method(i).Name, exceptMethod) { // 去除掉exceptMethod的方法
 			route := &ControllerInfo{}
 			route.routerType = routerTypeBeego
 			route.methods = map[string]string{"*": rt.Method(i).Name}
 			route.controllerType = ct
+			// 路由: "/{prefix}/{controller}/{method}/*"
 			pattern := path.Join(prefix, strings.ToLower(controllerName), strings.ToLower(rt.Method(i).Name), "*")
 			patternInit := path.Join(prefix, controllerName, rt.Method(i).Name, "*")
 			patternFix := path.Join(prefix, strings.ToLower(controllerName), strings.ToLower(rt.Method(i).Name))
@@ -422,17 +437,18 @@ func (p *ControllerRegister) AddAutoPrefix(prefix string, c ControllerInterface)
 	}
 }
 
-// InsertFilter Add a FilterFunc with pattern rule and action constant.
-// params is for:
-//   1. setting the returnOnOutput value (false allows multiple filters to execute)
-//   2. determining whether or not params need to be reset.
-func (p *ControllerRegister) InsertFilter(pattern string, pos int, filter FilterFunc, params ...bool) error {
+// 插入拦截器
+// params:
+//   1. 设置returnOnOutput值 (false 允许多个filter执行)
+//   2. 确定是否需要重置参数.
+func (p *ControllerRegister) InsertFilter(pattern string, position int, filter FilterFunc, params ...bool) error {
 	mr := &FilterRouter{
 		tree:           NewTree(),
 		pattern:        pattern,
 		filterFunc:     filter,
 		returnOnOutput: true,
 	}
+
 	if !BConfig.RouterCaseSensitive {
 		mr.pattern = strings.ToLower(pattern)
 	}
@@ -445,22 +461,24 @@ func (p *ControllerRegister) InsertFilter(pattern string, pos int, filter Filter
 		mr.resetParams = params[1]
 	}
 	mr.tree.AddRouter(pattern, true)
-	return p.insertFilterRouter(pos, mr)
+	return p.insertFilterRouter(position, mr)
 }
 
-// add Filter into
-func (p *ControllerRegister) insertFilterRouter(pos int, mr *FilterRouter) (err error) {
-	if pos < BeforeStatic || pos > FinishRouter {
+// 插入操作
+func (p *ControllerRegister) insertFilterRouter(position int, mr *FilterRouter) (err error) {
+	if position < BeforeStatic || position > FinishRouter {
 		err = fmt.Errorf("can not find your filter position")
 		return
 	}
-	p.enableFilter = true
-	p.filters[pos] = append(p.filters[pos], mr)
+
+	p.enableFilter = true                                 // 激活路由器
+	p.filters[position] = append(p.filters[position], mr) // 在指定的拦截点添加拦截器
 	return nil
 }
 
-// URLFor does another controller handler in this request function.
-// it can access any controller method.
+// 请求转发(在一个Handler当中调用其他的Handler)
+// endpoint: {path}.{controller}.{method}
+// values: "key", "value"
 func (p *ControllerRegister) URLFor(endpoint string, values ...interface{}) string {
 	paths := strings.Split(endpoint, ".")
 	if len(paths) <= 1 {
@@ -482,6 +500,7 @@ func (p *ControllerRegister) URLFor(endpoint string, values ...interface{}) stri
 			}
 		}
 	}
+
 	controllName := strings.Join(paths[:len(paths)-1], "/")
 	methodName := paths[len(paths)-1]
 	for m, t := range p.routers {

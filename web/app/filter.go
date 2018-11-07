@@ -6,11 +6,11 @@ import "github.com/astaxie/beego/context"
 type FilterFunc func(*context.Context)
 
 type FilterRouter struct {
-	filterFunc     FilterFunc
+	filterFunc     FilterFunc // 拦截函数
 	tree           *Tree
 	pattern        string
-	returnOnOutput bool
-	resetParams    bool
+	returnOnOutput bool // true表示只允许一个filter执行, false表示允许多个filter执行
+	resetParams    bool // 是否重置参数
 }
 
 /*
