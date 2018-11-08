@@ -218,23 +218,18 @@ func Htmlunquote(text string) string {
 	return strings.TrimSpace(text)
 }
 
-// URLFor returns url string with another registered controller handler with params.
-//	usage:
-//
-//	URLFor(".index")
-//	print URLFor("index")
-//  router /login
-//	print URLFor("login")
-//	print URLFor("login", "next","/"")
-//  router /profile/:username
-//	print UrlFor("profile", ":username","John Doe")
-//	result:
-//	/
-//	/login
-//	/login?next=/
-//	/user/John%20Doe
-//
-//  more detail http://beego.me/docs/mvc/controller/urlbuilding.md
+/*
+URLFor: 返回url字符串(将路由当中的参数实例化)
+
+URLFor("index") /
+
+路由: /login
+URLFor("login") /login
+URLFor("login", "next","/"") /login?next=/
+
+路由: /profile/:username
+UrlFor("profile", ":username","John Doe") /user/John%20Doe
+*/
 func URLFor(endpoint string, values ...interface{}) string {
 	return BeeApp.Handlers.URLFor(endpoint, values...)
 }

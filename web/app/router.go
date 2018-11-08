@@ -139,14 +139,14 @@ func NewControllerRegister() *ControllerRegister {
 }
 
 /*
-	向ControllerRegister当中添加路由
-	Add("/user", &UserController{})
-	Add("/api/list", &RestController{}, "*:ListFood")
-	Add("/api/create", &RestController{}, "post:CreateFood")
-	Add("/api/update", &RestController{}, "put:UpdateFood")
-	Add("/api/delete", &RestController{}, "delete:DeleteFood")
-	Add("/api", &RestController{}, "get,post:ApiFunc"
-	Add("/simple", &SimpleController{}, "get:GetFunc;post:PostFunc")
+向ControllerRegister当中添加路由
+Add("/user", &UserController{})
+Add("/api/list", &RestController{}, "*:ListFood")
+Add("/api/create", &RestController{}, "post:CreateFood")
+Add("/api/update", &RestController{}, "put:UpdateFood")
+Add("/api/delete", &RestController{}, "delete:DeleteFood")
+Add("/api", &RestController{}, "get,post:ApiFunc"
+Add("/simple", &SimpleController{}, "get:GetFunc;post:PostFunc")
 */
 func (p *ControllerRegister) Add(pattern string, c ControllerInterface, mappingMethods ...string) {
 	p.addWithMethodParams(pattern, c, nil, mappingMethods...)
@@ -182,7 +182,7 @@ func (p *ControllerRegister) addWithMethodParams(pattern string, controller Cont
 					if val := ctrVal.MethodByName(colon[1]); val.IsValid() {
 						methods[strings.ToUpper(m)] = colon[1]
 					} else {
-						panic("'" + colon[1] + "' method doesn't exist in the controller " + t.Name()) // Controller的私有方法
+						panic("'" + colon[1] + "' method doesn't exist in the controller " + ctrType.Name()) // Controller的私有方法
 					}
 				} else {
 					panic(v + " is an invalid method mapping. Method doesn't exist " + m) // 请求类型不存在, 或请求类型非法
@@ -476,7 +476,7 @@ func (p *ControllerRegister) insertFilterRouter(position int, mr *FilterRouter) 
 	return nil
 }
 
-// 请求转发(在一个Handler当中调用其他的Handler)
+// 实例化路由
 // endpoint: {path}.{controller}.{method}
 // values: "key", "value"
 func (p *ControllerRegister) URLFor(endpoint string, values ...interface{}) string {
@@ -503,8 +503,8 @@ func (p *ControllerRegister) URLFor(endpoint string, values ...interface{}) stri
 
 	controllName := strings.Join(paths[:len(paths)-1], "/")
 	methodName := paths[len(paths)-1]
-	for m, t := range p.routers {
-		ok, url := p.geturl(t, "/", controllName, methodName, params, m)
+	for httpMethod, tree := range p.routers {
+		ok, url := p.geturl(tree, "/", controllName, methodName, params, httpMethod)
 		if ok {
 			return url
 		}
@@ -518,66 +518,79 @@ url:
 controllerName:
 methodName:
 params:
-httpMethod
+httpMethod:
+
+返回: 否匹配成功 和 实例化后的url
 */
-func (p *ControllerRegister) geturl(tree *Tree, url, controllerName, methodName string, params map[string]string, httpMethod string) (bool, string) {
+func (p *ControllerRegister) geturl(tree *Tree, url, controllerName, methodName string, params map[string]string,
+	httpMethod string) (success bool, realUrl string) {
 	// 固定路由匹配
 	for _, subtree := range tree.fixrouters {
 		newUrl := path.Join(url, subtree.prefix)
-		ok, u := p.geturl(subtree, newUrl, controllerName, methodName, params, httpMethod)
-		if ok {
-			return ok, u
+		success, realUrl = p.geturl(subtree, newUrl, controllerName, methodName, params, httpMethod)
+		if success {
+			return success, realUrl
 		}
 	}
 
 	// 固定路由匹配失败, wildcard匹配
 	if tree.wildcard != nil {
-		newUrl := path.Join(url, urlPlaceholder)
-		ok, u := p.geturl(tree.wildcard, newUrl, controllerName, methodName, params, httpMethod)
-		if ok {
-			return ok, u
+		newUrl := path.Join(url, urlPlaceholder) // 添加urlPlaceholder
+		success, realUrl = p.geturl(tree.wildcard, newUrl, controllerName, methodName, params, httpMethod)
+		if success {
+			return success, realUrl
 		}
 	}
 
 	// wildcard匹配失败, 叶子节点匹配
-	for _, l := range tree.leaves {
-		if c, ok := l.runObject.(*ControllerInfo); ok {
+	for _, leaf := range tree.leaves {
+		if c, ok := leaf.runObject.(*ControllerInfo); ok {
 			// 只查找 routerTypeBeego 类型的路由
 			if c.routerType == routerTypeBeego &&
 				strings.HasSuffix(path.Join(c.controllerType.PkgPath(), c.controllerType.Name()), controllerName) {
 				find := false
 
+				// methodName是HTTP的请求方法
 				if HTTPMETHOD[strings.ToUpper(methodName)] {
 					if len(c.methods) == 0 {
 						find = true
-					} else if m, ok := c.methods[strings.ToUpper(methodName)]; ok && m == strings.ToUpper(methodName) {
+					} else if method, ok := c.methods[strings.ToUpper(methodName)];
+						ok && method == strings.ToUpper(methodName) {
 						find = true
-					} else if m, ok = c.methods["*"]; ok && m == methodName {
+					} else if method, ok = c.methods["*"]; ok && method == methodName {
 						find = true
 					}
 				}
 
+				// methodName不是HTTP的请求方法
 				if !find {
-					for m, md := range c.methods {
-						if (m == "*" || m == httpMethod) && md == methodName {
+					for methodeType, method := range c.methods {
+						if (methodeType == "*" || methodeType == httpMethod) && method == methodName {
 							find = true
 						}
 					}
 				}
 
+				// 当前leaf匹配上了, 进行url实例化过程
 				if find {
-					if l.regexps == nil {
-						if len(l.wildcards) == 0 {
+					// leaf正则表达式为空
+					if leaf.regexps == nil {
+
+						// 参数个数匹配
+						if len(leaf.wildcards) == 0 {
 							return true, strings.Replace(url, "/"+urlPlaceholder, "", 1) + toURL(params)
 						}
-						if len(l.wildcards) == 1 {
-							if v, ok := params[l.wildcards[0]]; ok {
-								delete(params, l.wildcards[0])
+
+						if len(leaf.wildcards) == 1 {
+							if v, ok := params[leaf.wildcards[0]]; ok { // 参数匹配
+								delete(params, leaf.wildcards[0])
 								return true, strings.Replace(url, urlPlaceholder, v, 1) + toURL(params)
 							}
 							return false, ""
 						}
-						if len(l.wildcards) == 3 && l.wildcards[0] == "." {
+
+						// [".", ":path", ":ext"] 匹配
+						if len(leaf.wildcards) == 3 && leaf.wildcards[0] == "." {
 							if p, ok := params[":path"]; ok {
 								if e, isok := params[":ext"]; isok {
 									delete(params, ":path")
@@ -586,12 +599,14 @@ func (p *ControllerRegister) geturl(tree *Tree, url, controllerName, methodName 
 								}
 							}
 						}
+
 						canskip := false
-						for _, v := range l.wildcards {
+						for _, v := range leaf.wildcards {
 							if v == ":" {
 								canskip = true
 								continue
 							}
+
 							if u, ok := params[v]; ok {
 								delete(params, v)
 								url = strings.Replace(url, urlPlaceholder, u, 1)
@@ -605,17 +620,21 @@ func (p *ControllerRegister) geturl(tree *Tree, url, controllerName, methodName 
 						}
 						return true, url + toURL(params)
 					}
-					var i int
-					var startreg bool
+
+					// leaf正则表达式匹配
+					var (
+						i        int
+						startreg bool
+					)
 					regurl := ""
-					for _, v := range strings.Trim(l.regexps.String(), "^$") {
+					for _, v := range strings.Trim(leaf.regexps.String(), "^$") {
 						if v == '(' {
 							startreg = true
 							continue
 						} else if v == ')' {
 							startreg = false
-							if v, ok := params[l.wildcards[i]]; ok {
-								delete(params, l.wildcards[i])
+							if v, ok := params[leaf.wildcards[i]]; ok {
+								delete(params, leaf.wildcards[i])
 								regurl = regurl + v
 								i++
 							} else {
@@ -625,7 +644,8 @@ func (p *ControllerRegister) geturl(tree *Tree, url, controllerName, methodName 
 							regurl = string(append([]rune(regurl), v))
 						}
 					}
-					if l.regexps.MatchString(regurl) {
+
+					if leaf.regexps.MatchString(regurl) {
 						ps := strings.Split(regurl, "/")
 						for _, p := range ps {
 							url = strings.Replace(url, urlPlaceholder, p, 1)
