@@ -398,109 +398,64 @@ func AutoRouter(c ControllerInterface) *App {
 	return BeeApp
 }
 
-// AutoPrefix adds controller handler to BeeApp with prefix.
-// it's same to App.AutoRouterWithPrefix.
-// if beego.AutoPrefix("/admin",&MainContorlller{}) and MainController has methods List and Page,
-// visit the url /admin/main/list to exec List function or /admin/main/page to exec Page function.
+// 添加带前缀的Controller, 和 App.AutoRouterWithPrefix相同
+// beego.AutoPrefix("/admin",&MainContorlller{}) MainController: List(), Page()
+// /admin/main/list -> List()
+// /admin/main/page -> Page()
 func AutoPrefix(prefix string, c ControllerInterface) *App {
 	BeeApp.Handlers.AddAutoPrefix(prefix, c)
 	return BeeApp
 }
 
-// Get used to register router for Get method
-// usage:
-//    beego.Get("/", func(ctx *context.Context){
-//          ctx.Output.Body("hello world")
-//    })
 func Get(rootpath string, f FilterFunc) *App {
 	BeeApp.Handlers.Get(rootpath, f)
 	return BeeApp
 }
 
-// Post used to register router for Post method
-// usage:
-//    beego.Post("/api", func(ctx *context.Context){
-//          ctx.Output.Body("hello world")
-//    })
 func Post(rootpath string, f FilterFunc) *App {
 	BeeApp.Handlers.Post(rootpath, f)
 	return BeeApp
 }
 
-// Delete used to register router for Delete method
-// usage:
-//    beego.Delete("/api", func(ctx *context.Context){
-//          ctx.Output.Body("hello world")
-//    })
 func Delete(rootpath string, f FilterFunc) *App {
 	BeeApp.Handlers.Delete(rootpath, f)
 	return BeeApp
 }
 
-// Put used to register router for Put method
-// usage:
-//    beego.Put("/api", func(ctx *context.Context){
-//          ctx.Output.Body("hello world")
-//    })
 func Put(rootpath string, f FilterFunc) *App {
 	BeeApp.Handlers.Put(rootpath, f)
 	return BeeApp
 }
 
-// Head used to register router for Head method
-// usage:
-//    beego.Head("/api", func(ctx *context.Context){
-//          ctx.Output.Body("hello world")
-//    })
 func Head(rootpath string, f FilterFunc) *App {
 	BeeApp.Handlers.Head(rootpath, f)
 	return BeeApp
 }
 
-// Options used to register router for Options method
-// usage:
-//    beego.Options("/api", func(ctx *context.Context){
-//          ctx.Output.Body("hello world")
-//    })
 func Options(rootpath string, f FilterFunc) *App {
 	BeeApp.Handlers.Options(rootpath, f)
 	return BeeApp
 }
 
-// Patch used to register router for Patch method
-// usage:
-//    beego.Patch("/api", func(ctx *context.Context){
-//          ctx.Output.Body("hello world")
-//    })
 func Patch(rootpath string, f FilterFunc) *App {
 	BeeApp.Handlers.Patch(rootpath, f)
 	return BeeApp
 }
 
-// Any used to register router for all methods
-// usage:
-//    beego.Any("/api", func(ctx *context.Context){
-//          ctx.Output.Body("hello world")
-//    })
 func Any(rootpath string, f FilterFunc) *App {
 	BeeApp.Handlers.Any(rootpath, f)
 	return BeeApp
 }
 
-// Handler used to register a Handler router
-// usage:
-//    beego.Handler("/api", http.HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
-//          fmt.Fprintf(w, "Hello, %q", html.EscapeString(r.URL.Path))
-//    }))
 func Handler(rootpath string, h http.Handler, options ...interface{}) *App {
 	BeeApp.Handlers.Handler(rootpath, h, options...)
 	return BeeApp
 }
 
-// InsertFilter adds a FilterFunc with pattern condition and action constant.
-// The pos means action constant including
-// beego.BeforeStatic, beego.BeforeRouter, beego.BeforeExec, beego.AfterExec and beego.FinishRouter.
-// The bool params is for setting the returnOnOutput value (false allows multiple filters to execute)
+// 添加过滤器FilterFunc
+// pattern: 路由
+// pos: 路由点
+// params: 路由控制参数
 func InsertFilter(pattern string, pos int, filter FilterFunc, params ...bool) *App {
 	BeeApp.Handlers.InsertFilter(pattern, pos, filter, params...)
 	return BeeApp

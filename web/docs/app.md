@@ -1,5 +1,6 @@
-## app 启动运行流程
+## 结构图
 
-- NewControllerRegister(), 注册Controller
+app核心:
+    - ControllerRegister
 
-- Run
+    - Server: http.Server
