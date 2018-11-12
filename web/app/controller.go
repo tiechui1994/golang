@@ -19,61 +19,30 @@ import (
 )
 
 var (
-	// ErrAbort custom error when user stop request handler manually.
+	// 停止请求处理的错误类型
 	ErrAbort = errors.New("User stop run")
-	// GlobalControllerRouter store comments with controller. pkgpath+controller:comments
+	// 存储所有的Controller的注释;  pkgpath+controller:comments
 	GlobalControllerRouter = make(map[string][]ControllerComments)
 )
 
-// ControllerComments store the comment for the controller method
 type ControllerComments struct {
-	Method           string
-	Router           string
-	AllowHTTPMethods []string
-	Params           []map[string]string
-	MethodParams     []*param.MethodParam
+	Method           string               // 方法名称
+	Router           string               // 路由
+	AllowHTTPMethods []string             // 请求类型
+	Params           []map[string]string  // 路由参数
+	MethodParams     []*param.MethodParam // 方法参数
 }
 
-// ControllerCommentsSlice implements the sort interface
+// 实现了Sort接口
 type ControllerCommentsSlice []ControllerComments
 
 func (p ControllerCommentsSlice) Len() int           { return len(p) }
 func (p ControllerCommentsSlice) Less(i, j int) bool { return p[i].Router < p[j].Router }
 func (p ControllerCommentsSlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
-// Controller defines some basic http request handler operations, such as
-// http context, template and view, session and xsrf.
-type Controller struct {
-	// context data
-	Ctx  *context.Context
-	Data map[interface{}]interface{}
+//----------------------------------------------------------------------------------------------------------------------
 
-	// route controller info
-	controllerName string
-	actionName     string
-	methodMapping  map[string]func() //method:routertree
-	gotofunc       string
-	AppController  interface{}
-
-	// template data
-	TplName        string
-	ViewPath       string
-	Layout         string
-	LayoutSections map[string]string // the key is the section name and the value is the template name
-	TplPrefix      string
-	TplExt         string
-	EnableRender   bool
-
-	// xsrf data
-	_xsrfToken string
-	XSRFExpire int
-	EnableXSRF bool
-
-	// session
-	CruSession session.Store
-}
-
-// ControllerInterface is an interface to uniform all controller handler.
+// 统一所有Controller的接口
 type ControllerInterface interface {
 	Init(ct *context.Context, controllerName, actionName string, app interface{})
 	Prepare()
@@ -90,6 +59,36 @@ type ControllerInterface interface {
 	CheckXSRFCookie() bool
 	HandlerFunc(fn string) bool
 	URLMapping()
+}
+
+type Controller struct {
+	// context data
+	Ctx  *context.Context
+	Data map[interface{}]interface{}
+
+	// route controller info
+	controllerName string
+	actionName     string
+	methodMapping  map[string]func() // method:routertree
+	gotofunc       string
+	AppController  interface{}
+
+	// template data
+	TplName        string
+	ViewPath       string
+	Layout         string
+	LayoutSections map[string]string // section name : template name
+	TplPrefix      string
+	TplExt         string
+	EnableRender   bool
+
+	// xsrf data
+	_xsrfToken string
+	XSRFExpire int
+	EnableXSRF bool
+
+	// session
+	CruSession session.Store
 }
 
 // Init generates default values of controller operations.
