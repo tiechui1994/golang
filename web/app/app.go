@@ -29,10 +29,9 @@ func init() {
 
 // App使用新的PatternServeMux定义了beego应用程序
 type App struct {
-	Handlers *ControllerRegister
+	Handlers *ControllerRegister // 实现了ServeHTTP方法, 即Handler实例, 除此之外, 还保存了其他信息
 	Server   *http.Server
 }
-
 
 func NewApp() *App {
 	cr := NewControllerRegister()
@@ -40,10 +39,13 @@ func NewApp() *App {
 	return app
 }
 
-// 中间件
+// 中间件: MiddleWare是对Handler的过滤处理, 其返回结果是一个Handler
 type MiddleWare func(http.Handler) http.Handler
 
-// 启动
+// 启动模式:
+// 1. FastCGI
+// 2. HTTP
+// 3. HTTPS
 func (app *App) Run(mws ...MiddleWare) {
 	addr := BConfig.Listen.HTTPAddr
 
@@ -59,9 +61,8 @@ func (app *App) Run(mws ...MiddleWare) {
 
 	// run cgi server
 	if BConfig.Listen.EnableFcgi {
-		// 通过fastcgi 标准I/O，启用 fastcgi 后才生效
-		if BConfig.Listen.EnableStdIo {
-			if err = fcgi.Serve(nil, app.Handlers); err == nil { // standard I/O
+		if BConfig.Listen.EnableStdIo { // 通过fastcgi标准I/O, 启用fastcgi后才生效, 类似Unix进程间通信
+			if err = fcgi.Serve(nil, app.Handlers); err == nil {
 				logs.Info("Use FCGI via standard I/O")
 			} else {
 				logs.Critical("Cannot use FCGI via standard I/O", err)
@@ -69,13 +70,12 @@ func (app *App) Run(mws ...MiddleWare) {
 			return
 		}
 
-		if BConfig.Listen.HTTPPort == 0 {
-			// remove the Socket file before start
+		if BConfig.Listen.HTTPPort == 0 { // 本地监听, 采用的是unix进程间通信
 			if utils.FileExists(addr) {
 				os.Remove(addr)
 			}
 			l, err = net.Listen("unix", addr)
-		} else {
+		} else { // 远程监听, 采用tcp进程通信
 			l, err = net.Listen("tcp", addr)
 		}
 		if err != nil {
@@ -84,42 +84,53 @@ func (app *App) Run(mws ...MiddleWare) {
 		if err = fcgi.Serve(l, app.Handlers); err != nil {
 			logs.Critical("fcgi.Serve: ", err)
 		}
+
 		return
 	}
 
-	// run server handler
+	// set handler
 	app.Server.Handler = app.Handlers
 	for i := len(mws) - 1; i >= 0; i-- {
 		if mws[i] == nil {
 			continue
 		}
+		// MiddleWare是对Handler的过滤处理, 其返回结果是一个Handler, 这里的操作是改造当前的Handler
 		app.Server.Handler = mws[i](app.Server.Handler)
 	}
 	app.Server.ReadTimeout = time.Duration(BConfig.Listen.ServerTimeOut) * time.Second
 	app.Server.WriteTimeout = time.Duration(BConfig.Listen.ServerTimeOut) * time.Second
 	app.Server.ErrorLog = logs.GetLogger("HTTP")
 
-	// run graceful mode
+	// run graceful mode(优雅启动)
 	if BConfig.Listen.Graceful {
 		httpsAddr := BConfig.Listen.HTTPSAddr
 		app.Server.Addr = httpsAddr
+		// 开启 HTTPS 安全模式
 		if BConfig.Listen.EnableHTTPS || BConfig.Listen.EnableMutualHTTPS {
 			go func() {
 				time.Sleep(1000 * time.Microsecond)
+				// addr
 				if BConfig.Listen.HTTPSPort != 0 {
 					httpsAddr = fmt.Sprintf("%s:%d", BConfig.Listen.HTTPSAddr, BConfig.Listen.HTTPSPort)
 					app.Server.Addr = httpsAddr
 				}
-				server := grace.NewServer(httpsAddr, app.Handlers)
+
+				// server, 这里对原始server进行了特殊处理.
+				server := grace.NewServer(httpsAddr, app.Handlers) // httpsAddr进行了处理
 				server.Server.ReadTimeout = app.Server.ReadTimeout
 				server.Server.WriteTimeout = app.Server.WriteTimeout
+
+				// EnableHTTPS: 开启HTTPS认证, 基本的HTTPS认证 -> AutoTLS: 自动TSL, ListenAndServeTLS()
+				// EnableMutualHTTPS: 双方都进行HTTPS认证, 客户端认证服务器, 服务器认证客户端, ListenAndServeMutualTLS()
 				if BConfig.Listen.EnableMutualHTTPS {
-					if err := server.ListenAndServeMutualTLS(BConfig.Listen.HTTPSCertFile, BConfig.Listen.HTTPSKeyFile, BConfig.Listen.TrustCaFile); err != nil {
+					if err := server.ListenAndServeMutualTLS(BConfig.Listen.HTTPSCertFile, BConfig.Listen.HTTPSKeyFile,
+						BConfig.Listen.TrustCaFile); err != nil {
 						logs.Critical("ListenAndServeTLS: ", err, fmt.Sprintf("%d", os.Getpid()))
 						time.Sleep(100 * time.Microsecond)
 						endRunning <- true
 					}
 				} else {
+					// Server端的HTTPS
 					if BConfig.Listen.AutoTLS {
 						m := autocert.Manager{
 							Prompt:     autocert.AcceptTOS,
@@ -129,6 +140,7 @@ func (app *App) Run(mws ...MiddleWare) {
 						app.Server.TLSConfig = &tls.Config{GetCertificate: m.GetCertificate}
 						BConfig.Listen.HTTPSCertFile, BConfig.Listen.HTTPSKeyFile = "", ""
 					}
+
 					if err := server.ListenAndServeTLS(BConfig.Listen.HTTPSCertFile, BConfig.Listen.HTTPSKeyFile); err != nil {
 						logs.Critical("ListenAndServeTLS: ", err, fmt.Sprintf("%d", os.Getpid()))
 						time.Sleep(100 * time.Microsecond)
@@ -137,6 +149,8 @@ func (app *App) Run(mws ...MiddleWare) {
 				}
 			}()
 		}
+
+		// 开启 HTTP 模式
 		if BConfig.Listen.EnableHTTP {
 			go func() {
 				server := grace.NewServer(addr, app.Handlers)
@@ -159,6 +173,9 @@ func (app *App) Run(mws ...MiddleWare) {
 	// run normal mode
 	if BConfig.Listen.EnableHTTPS || BConfig.Listen.EnableMutualHTTPS {
 		go func() {
+			// EnableHTTPS: 开启HTTPS认证, 基本的HTTPS认证 -> AutoTLS: 自动TSL
+			// EnableMutualHTTPS: 双方都进行HTTPS认证, 客户端认证服务器, 服务器认证客户端
+
 			time.Sleep(1000 * time.Microsecond)
 			if BConfig.Listen.HTTPSPort != 0 {
 				app.Server.Addr = fmt.Sprintf("%s:%d", BConfig.Listen.HTTPSAddr, BConfig.Listen.HTTPSPort)
@@ -166,7 +183,9 @@ func (app *App) Run(mws ...MiddleWare) {
 				BeeLogger.Info("Start https server error, conflict with http. Please reset https port")
 				return
 			}
+
 			logs.Info("https server Running on https://%s", app.Server.Addr)
+
 			if BConfig.Listen.AutoTLS {
 				m := autocert.Manager{
 					Prompt:     autocert.AcceptTOS,
@@ -176,6 +195,7 @@ func (app *App) Run(mws ...MiddleWare) {
 				app.Server.TLSConfig = &tls.Config{GetCertificate: m.GetCertificate}
 				BConfig.Listen.HTTPSCertFile, BConfig.Listen.HTTPSKeyFile = "", ""
 			} else if BConfig.Listen.EnableMutualHTTPS {
+				// 双方都进行HTTPS认证的核心代码, 参考 grace/server
 				pool := x509.NewCertPool()
 				data, err := ioutil.ReadFile(BConfig.Listen.TrustCaFile)
 				if err != nil {
@@ -188,6 +208,7 @@ func (app *App) Run(mws ...MiddleWare) {
 					ClientAuth: tls.RequireAndVerifyClientCert,
 				}
 			}
+
 			if err := app.Server.ListenAndServeTLS(BConfig.Listen.HTTPSCertFile, BConfig.Listen.HTTPSKeyFile); err != nil {
 				logs.Critical("ListenAndServeTLS: ", err)
 				time.Sleep(100 * time.Microsecond)
@@ -201,7 +222,8 @@ func (app *App) Run(mws ...MiddleWare) {
 		go func() {
 			app.Server.Addr = addr
 			logs.Info("http server Running on http://%s", app.Server.Addr)
-			if BConfig.Listen.ListenTCP4 {
+
+			if BConfig.Listen.ListenTCP4 { // tcp
 				ln, err := net.Listen("tcp4", app.Server.Addr)
 				if err != nil {
 					logs.Critical("ListenAndServe: ", err)
@@ -209,6 +231,7 @@ func (app *App) Run(mws ...MiddleWare) {
 					endRunning <- true
 					return
 				}
+
 				if err = app.Server.Serve(ln); err != nil {
 					logs.Critical("ListenAndServe: ", err)
 					time.Sleep(100 * time.Microsecond)
@@ -216,7 +239,7 @@ func (app *App) Run(mws ...MiddleWare) {
 					return
 				}
 			} else {
-				if err := app.Server.ListenAndServe(); err != nil {
+				if err := app.Server.ListenAndServe(); err != nil { // http
 					logs.Critical("ListenAndServe: ", err)
 					time.Sleep(100 * time.Microsecond)
 					endRunning <- true
@@ -224,39 +247,36 @@ func (app *App) Run(mws ...MiddleWare) {
 			}
 		}()
 	}
+
 	<-endRunning
 }
 
-// Router adds a patterned controller handler to BeeApp.
-// it's an alias method of App.Router.
-// usage:
-//  simple router
-//  beego.Router("/admin", &admin.UserController{})
-//  beego.Router("/admin/index", &admin.ArticleController{})
-//
-//  regex router
-//
-//  beego.Router("/api/:id([0-9]+)", &controllers.RController{})
-//
-//  custom rules
-//  beego.Router("/api/list",&RestController{},"*:ListFood")
-//  beego.Router("/api/create",&RestController{},"post:CreateFood")
-//  beego.Router("/api/update",&RestController{},"put:UpdateFood")
-//  beego.Router("/api/delete",&RestController{},"delete:DeleteFood")
+/*
+添加路由
+  simple router
+  beego.Router("/admin", &admin.UserController{})
+  beego.Router("/admin/index", &admin.ArticleController{})
+
+  regex router
+  beego.Router("/api/:id([0-9]+)", &controllers.RController{})
+
+  custom rules
+  beego.Router("/api/list",&RestController{},"*:ListFood")
+  beego.Router("/api/create",&RestController{},"post:CreateFood")
+*/
 func Router(rootpath string, c ControllerInterface, mappingMethods ...string) *App {
 	BeeApp.Handlers.Add(rootpath, c, mappingMethods...)
 	return BeeApp
 }
 
-// UnregisterFixedRoute unregisters the route with the specified fixedRoute. It is particularly useful
-// in web applications that inherit most routes from a base webapp via the underscore
-// import, and aim to overwrite only certain paths.
-// The method parameter can be empty or "*" for all HTTP methods, or a particular
-// method type (e.g. "GET" or "POST") for selective removal.
-//
-// Usage (replace "GET" with "*" for all methods):
-//  beego.UnregisterFixedRoute("/yourpreviouspath", "GET")
-//  beego.Router("/yourpreviouspath", yourControllerAddress, "get:GetNewPage")
+/*
+ UnregisterFixedRoute: 取消注册指定fixedRoute路由. 对于所有HTTP方法,方法参数可以是空的或"*",或者用于选择性移
+ 除的特定方法类型(例如"GET"或"POST")。
+
+ Usage (replace "GET" with "*" for all methods):
+  beego.UnregisterFixedRoute("/yourpreviouspath", "GET")
+  beego.Router("/yourpreviouspath", yourControllerAddress, "get:GetNewPage")
+*/
 func UnregisterFixedRoute(fixedRoute string, method string) *App {
 	subPaths := splitPath(fixedRoute)
 	if method == "" || method == "*" {
@@ -272,6 +292,7 @@ func UnregisterFixedRoute(fixedRoute string, method string) *App {
 		}
 		return BeeApp
 	}
+
 	// Single HTTP method
 	um := strings.ToUpper(method)
 	if _, ok := BeeApp.Handlers.routers[um]; ok {
@@ -286,17 +307,16 @@ func UnregisterFixedRoute(fixedRoute string, method string) *App {
 
 func findAndRemoveTree(paths []string, entryPointTree *Tree, method string) {
 	for i := range entryPointTree.fixrouters {
-		if entryPointTree.fixrouters[i].prefix == paths[0] {
+		if entryPointTree.fixrouters[i].prefix == paths[0] { // 前缀匹配
 			if len(paths) == 1 {
 				if len(entryPointTree.fixrouters[i].fixrouters) > 0 {
-					// If the route had children subtrees, remove just the functional leaf,
-					// to allow children to function as before
+					// 如果路由有叶子,只删除第一个叶子, 其他的叶子保留
 					if len(entryPointTree.fixrouters[i].leaves) > 0 {
 						entryPointTree.fixrouters[i].leaves[0] = nil
 						entryPointTree.fixrouters[i].leaves = entryPointTree.fixrouters[i].leaves[1:]
 					}
 				} else {
-					// Remove the *Tree from the fixrouters slice
+					// 路由没有叶子, 删除当前的Tree
 					entryPointTree.fixrouters[i] = nil
 
 					if i == len(entryPointTree.fixrouters)-1 {
@@ -307,7 +327,8 @@ func findAndRemoveTree(paths []string, entryPointTree *Tree, method string) {
 				}
 				return
 			}
-			findAndRemoveTree(paths[1:], entryPointTree.fixrouters[i], method)
+
+			findAndRemoveTree(paths[1:], entryPointTree.fixrouters[i], method) // 后续匹配
 		}
 	}
 }
@@ -316,9 +337,9 @@ func findAndRemoveSingleTree(entryPointTree *Tree) {
 	if entryPointTree == nil {
 		return
 	}
+
 	if len(entryPointTree.fixrouters) > 0 {
-		// If the route had children subtrees, remove just the functional leaf,
-		// to allow children to function as before
+		// 如果路由有子树,只删除第一个叶子, 其他的叶子保留
 		if len(entryPointTree.leaves) > 0 {
 			entryPointTree.leaves[0] = nil
 			entryPointTree.leaves = entryPointTree.leaves[1:]
@@ -326,51 +347,52 @@ func findAndRemoveSingleTree(entryPointTree *Tree) {
 	}
 }
 
-// Include will generate router file in the router/xxx.go from the controller's comments
-// usage:
-// beego.Include(&BankAccount{}, &OrderController{},&RefundController{},&ReceiptController{})
-// type BankAccount struct{
-//   beego.Controller
-// }
-//
-// register the function
-// func (b *BankAccount)Mapping(){
-//  b.Mapping("ShowAccount" , b.ShowAccount)
-//  b.Mapping("ModifyAccount", b.ModifyAccount)
-//}
-//
-// //@router /account/:id  [get]
-// func (b *BankAccount) ShowAccount(){
-//    //logic
-// }
-//
-//
-// //@router /account/:id  [post]
-// func (b *BankAccount) ModifyAccount(){
-//    //logic
-// }
-//
-// the comments @router url methodlist
-// url support all the function Router's pattern
-// methodlist [get post head put delete options *]
+/*
+ Include: 生成Controller的注释路由文件 router/xxx.go
+
+ usage:
+ 	beego.Include(&BankAccount{}, &OrderController{},&RefundController{},&ReceiptController{})
+ 	type BankAccount struct{
+    	beego.Controller
+ 	}
+
+ 	register the function, ???
+ 	func (b *BankAccount) Mapping(){
+  		b.Mapping("ShowAccount" , b.ShowAccount)
+  		b.Mapping("ModifyAccount", b.ModifyAccount)
+	}
+
+ 	// @router /account/:id  [get]
+ 	func (b *BankAccount) ShowAccount(){
+    	// ...
+ 	}
+
+    //@router /account/:id  [post]
+	func (b *BankAccount) ModifyAccount(){
+		//...
+    }
+
+	注释格式: // @router /url/path/pattern [get post head put delete options *]
+*/
 func Include(cList ...ControllerInterface) *App {
 	BeeApp.Handlers.Include(cList...)
 	return BeeApp
 }
 
-// RESTRouter adds a restful controller handler to BeeApp.
-// its' controller implements beego.ControllerInterface and
-// defines a param "pattern/:objectId" to visit each resource.
+/*
+  添加restful风格的Controller.
+  Controller需要实现beego.ControllerInterface 并且定义 "pattern/:objectId" 访问每个资源
+*/
 func RESTRouter(rootpath string, c ControllerInterface) *App {
 	Router(rootpath, c)
 	Router(path.Join(rootpath, ":objectId"), c)
 	return BeeApp
 }
 
-// AutoRouter adds defined controller handler to BeeApp.
-// it's same to App.AutoRouter.
-// if beego.AddAuto(&MainContorlller{}) and MainController has methods List and Page,
-// visit the url /main/list to exec List function or /main/page to exec Page function.
+// 添加定义的Controller, 和App.AutoRouter相同
+// beego.AddAuto(&MainContorlller{}) MainController方法, List(), Page()
+// /main/list -> List()
+// /main/page -> Page()
 func AutoRouter(c ControllerInterface) *App {
 	BeeApp.Handlers.AddAuto(c)
 	return BeeApp

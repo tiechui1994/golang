@@ -176,4 +176,6 @@ func main() {
 	siteType := reflect.TypeOf(site)
 
 	fmt.Println(path.Join(siteType.PkgPath(), siteType.Name()))
+
+	fmt.Println(strings.Trim("/    java", "/ "))
 }
