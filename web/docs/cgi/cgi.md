@@ -14,13 +14,13 @@ web server会把这个请求简单处理, 然后交给php解释器.
 解析器会解析php.ini文件, 初始化执行环境, 然后处理请求, 再以规定CGI规定的格式返回处理后的结果,退出进程, Web server
 再把结果返回给浏览器.
 
-**CGI**,  公共网关接口(Common Gateway Interface). web server 和web application之间交换的一种协议. [接口]
+- **CGI**,  公共网关接口(Common Gateway Interface). web server 和web application之间交换的一种协议. [接口]
 
-**FastCGI**, 同CGI, 是对CGI在效率上做了一些优化. SCGI协议和FastCGI类似. [接口]
+- **FastCGI**, 同CGI, 是对CGI在效率上做了一些优化. SCGI协议和FastCGI类似. [接口]
 
-**PHP-CGI**, 是PHP (Web Application)对Web Server提供的`CGI协议`的接口程序 [实现]
+- **PHP-CGI**, 是PHP (Web Application)对Web Server提供的`CGI协议`的接口程序 [实现]
 
-**PHP-FPM**, 是PHP (Web Application)对Web Server提供的`FastCGI协议`的接口程序, 额外还提供了相对智能一些的
+- **PHP-FPM**, 是PHP (Web Application)对Web Server提供的`FastCGI协议`的接口程序, 额外还提供了相对智能一些的
 任务管理. [实现]
 
 说明: Web Application一般指PHP, Java, 等应用程序. Web Server一般指的Apache, Nginx, IIS, Tomcat等服务器.

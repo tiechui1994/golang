@@ -16,7 +16,4 @@
 bin/
 pkg/
 test/
-*.pdf
-*.png
-*.jpg
 
