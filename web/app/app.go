@@ -20,32 +20,30 @@ import (
 )
 
 var (
-	// BeeApp is an application instance
-	BeeApp *App
+	BeeApp *App // app实例
 )
 
 func init() {
-	// create beego application
 	BeeApp = NewApp()
 }
 
-// App defines beego application with a new PatternServeMux.
+// App使用新的PatternServeMux定义了beego应用程序
 type App struct {
 	Handlers *ControllerRegister
 	Server   *http.Server
 }
 
-// NewApp returns a new beego application.
+
 func NewApp() *App {
 	cr := NewControllerRegister()
 	app := &App{Handlers: cr, Server: &http.Server{}}
 	return app
 }
 
-// MiddleWare function for http.Handler
+// 中间件
 type MiddleWare func(http.Handler) http.Handler
 
-// Run beego application.
+// 启动
 func (app *App) Run(mws ...MiddleWare) {
 	addr := BConfig.Listen.HTTPAddr
 
@@ -61,6 +59,7 @@ func (app *App) Run(mws ...MiddleWare) {
 
 	// run cgi server
 	if BConfig.Listen.EnableFcgi {
+		// 通过fastcgi 标准I/O，启用 fastcgi 后才生效
 		if BConfig.Listen.EnableStdIo {
 			if err = fcgi.Serve(nil, app.Handlers); err == nil { // standard I/O
 				logs.Info("Use FCGI via standard I/O")
@@ -69,6 +68,7 @@ func (app *App) Run(mws ...MiddleWare) {
 			}
 			return
 		}
+
 		if BConfig.Listen.HTTPPort == 0 {
 			// remove the Socket file before start
 			if utils.FileExists(addr) {
@@ -87,6 +87,7 @@ func (app *App) Run(mws ...MiddleWare) {
 		return
 	}
 
+	// run server handler
 	app.Server.Handler = app.Handlers
 	for i := len(mws) - 1; i >= 0; i-- {
 		if mws[i] == nil {
@@ -195,6 +196,7 @@ func (app *App) Run(mws ...MiddleWare) {
 		}()
 
 	}
+
 	if BConfig.Listen.EnableHTTP {
 		go func() {
 			app.Server.Addr = addr

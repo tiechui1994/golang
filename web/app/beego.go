@@ -8,37 +8,32 @@ import (
 )
 
 const (
-	// VERSION represent beego web framework version.
 	VERSION = "1.10.1"
-
-	// DEV is for develop
-	DEV = "dev"
-	// PROD is for production
-	PROD = "prod"
+	DEV     = "dev"
+	PROD    = "prod"
 )
 
-// Map shortcut
 type M map[string]interface{}
 
-// Hook function to run
 type hookfunc func() error
 
 var (
-	hooks = make([]hookfunc, 0) //hook function slice to store the hookfunc
+	hooks = make([]hookfunc, 0) // 存储hookfunc
 )
 
-// AddAPPStartHook is used to register the hookfunc
-// The hookfuncs will run in beego.Run()
-// such as initiating session , starting middleware , building template, starting admin control and so on.
+// AddAPPStartHook用于注册hookfunc, hookfuncs将在beego.Run()中运行
+// 比如, 启动会话, 启动中间件, 构建模板, 启动管理控制等.
 func AddAPPStartHook(hf ...hookfunc) {
 	hooks = append(hooks, hf...)
 }
 
-// Run beego application.
-// beego.Run() default run on HttpPort
-// beego.Run("localhost")
-// beego.Run(":8089")
-// beego.Run("127.0.0.1:8089")
+/*
+ 启动app
+ beego.Run() default run on HttpPort
+ beego.Run("localhost")
+ beego.Run(":8089")
+ beego.Run("127.0.0.1:8089")
+*/
 func Run(params ...string) {
 
 	initBeforeHTTPRun()
@@ -58,7 +53,7 @@ func Run(params ...string) {
 	BeeApp.Run()
 }
 
-// RunWithMiddleWares Run beego application with middlewares.
+// 带有中间件的启动app
 func RunWithMiddleWares(addr string, mws ...MiddleWare) {
 	initBeforeHTTPRun()
 
@@ -75,7 +70,7 @@ func RunWithMiddleWares(addr string, mws ...MiddleWare) {
 }
 
 func initBeforeHTTPRun() {
-	//init hooks
+	// 默认的hookfunc
 	AddAPPStartHook(
 		registerMime,
 		registerDefaultErrorHandler,
