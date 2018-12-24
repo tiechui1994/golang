@@ -11,18 +11,16 @@ import (
 顶层设计: reflect.Type
 type Type interface {
 	// 当内存中分配时, Align()返回此类型值的对齐字节.
-	// Align returns the alignment in bytes of a value of
-	// this type when allocated in memory.
 	Align() int
 
 	// 当用作结构中的字段时, FieldAlign() 返回此类型值的字节对齐字节.
-	// FieldAlign returns the alignment in bytes of a value of
-	// this type when used as a field in a struct.
 	FieldAlign() int
 
-	// Method returns the i'th method in the type's method set.
-	// It panics if i is not in the range [0, NumMethod()).
+	// 方法返回类型方法集中的第i个方法。
+	// 如果i不在[0, NumMethod())范围内, 就会发生panic.
+	// 对于非接口类型T或*T, 返回的Method的Type和Func字段描述了一个函数,其第一个参数是接收者.
 	//
+	// 对于接口类型, 返回的Method的Type字段给出方法签名, 没有接收器, Func字段为nil.
 	// For a non-interface type T or *T, the returned Method's Type and Func
 	// fields describe a function whose first argument is the receiver.
 	//
@@ -30,9 +28,8 @@ type Type interface {
 	// method signature, without a receiver, and the Func field is nil.
 	Method(int) Method
 
-	// MethodByName returns the method with that name in the type's
-	// method set and a boolean indicating if the method was found.
-	//
+
+	// MethodByName在类型的方法集中返回具有该名称的方法,并返回指示是否找到该方法的布尔值.
 	// For a non-interface type T or *T, the returned Method's Type and Func
 	// fields describe a function whose first argument is the receiver.
 	//
@@ -40,7 +37,7 @@ type Type interface {
 	// method signature, without a receiver, and the Func field is nil.
 	MethodByName(string) (Method, bool)
 
-	// NumMethod returns the number of exported methods in the type's method set.
+	// 可以导出的方法的数量
 	NumMethod() int
 
 	// Name returns the type's name within its package.
@@ -186,19 +183,39 @@ type Simple struct {
 	B int
 }
 
+func (s *Simple) Say(str string) {
+	fmt.Println(str)
+}
+
 type Complex struct {
 	S Simple
 	X string
 }
 
+type Interface interface {
+	Say() string
+}
+
+type Impl struct {
+}
+
+func (i *Impl) Say() string {
+	return "Java"
+}
+
 func main() {
 	s := reflect.TypeOf(Simple{})
-
+	v := reflect.ValueOf(Simple{})
 	fmt.Println(s.Align())
 	fmt.Println(s.FieldAlign())
+	fmt.Println(v.NumMethod())
 
 	c := reflect.TypeOf(Complex{})
 
 	fmt.Println(c.Align())
 	fmt.Println(c.FieldAlign())
+
+	var imV interface{} = Impl{}
+	im := reflect.ValueOf(imV)
+	fmt.Println(im.NumMethod())
 }
