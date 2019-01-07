@@ -3,6 +3,7 @@ package main
 import (
 	"reflect"
 	"fmt"
+	"strings"
 )
 
 /*
@@ -18,23 +19,19 @@ type Type interface {
 
 	// 方法返回类型方法集中的第i个方法。
 	// 如果i不在[0, NumMethod())范围内, 就会发生panic.
-	// 对于非接口类型T或*T, 返回的Method的Type和Func字段描述了一个函数,其第一个参数是接收者.
 	//
-	// 对于接口类型, 返回的Method的Type字段给出方法签名, 没有接收器, Func字段为nil.
-	// For a non-interface type T or *T, the returned Method's Type and Func
-	// fields describe a function whose first argument is the receiver.
+	// 对于非接口类型T或*T, 返回的Method的Type和Func字段描述了一个函数, 其第一个参数是接收者.
+	// 对于接口类型, 返回的Method的Type字段给出方法体, 没有执行者, Func字段为nil.
 	//
-	// For an interface type, the returned Method's Type field gives the
-	// method signature, without a receiver, and the Func field is nil.
+	// 接口类型: 被反射的对象的type是接口类型, value是结构体
+	// 非接口类型: 被反射的对象的type是结构体, value是结构体
+	// 例如: var r Reader = bytes.NewBuffer(nil), r 是一个接口类型的对象
+	//      var w Buffer = bytes.NewBuffer(nil), w 是一个非接口类型的对象
+	//
 	Method(int) Method
 
 
 	// MethodByName在类型的方法集中返回具有该名称的方法,并返回指示是否找到该方法的布尔值.
-	// For a non-interface type T or *T, the returned Method's Type and Func
-	// fields describe a function whose first argument is the receiver.
-	//
-	// For an interface type, the returned Method's Type field gives the
-	// method signature, without a receiver, and the Func field is nil.
 	MethodByName(string) (Method, bool)
 
 	// 可以导出的方法的数量
@@ -177,45 +174,49 @@ type Type interface {
 
 
 */
+type Inter interface {
+	Say(str string)
+}
 
-type Simple struct {
+type Interface struct {
 	A string
 	B int
 }
 
-func (s *Simple) Say(str string) {
+func (i *Interface) Say(str string) {
 	fmt.Println(str)
 }
 
-type Complex struct {
-	S Simple
-	X string
+type Struct struct {
 }
 
-type Interface interface {
-	Say() string
+func (s *Struct) SayWord(str string) {
+	fmt.Println(str)
 }
 
-type Impl struct {
-}
-
-func (i *Impl) Say() string {
-	return "Java"
+func SayWord(str string) {
+	fmt.Println(str)
 }
 
 func main() {
-	s := reflect.TypeOf(Simple{})
-	v := reflect.ValueOf(Simple{})
-	fmt.Println(s.Align())
-	fmt.Println(s.FieldAlign())
-	fmt.Println(v.NumMethod())
+	var i Inter = &Interface{}
+	it := reflect.TypeOf(i)
+	fmt.Printf("Align:%v \n", it.Align())
+	fmt.Printf("FieldAlign:%v \n", it.FieldAlign())
 
-	c := reflect.TypeOf(Complex{})
+	fmt.Printf("Interface Type NumMethod:%v \n", it.NumMethod())
+	fmt.Printf("Interface Type Method:%+v \n", it.Method(0))
 
-	fmt.Println(c.Align())
-	fmt.Println(c.FieldAlign())
+	fmt.Println(strings.Repeat("==", 10))
 
-	var imV interface{} = Impl{}
-	im := reflect.ValueOf(imV)
-	fmt.Println(im.NumMethod())
+	var s = &Struct{}
+	st := reflect.TypeOf(s)
+	fmt.Printf("Struct Type NumMethod:%v \n", st.NumMethod())
+	fmt.Printf("Struct Type Method:%+v \n", st.Method(0))
+
+	fmt.Println(strings.Repeat("==", 10))
+
+	var m = SayWord
+	mt := reflect.TypeOf(m)
+	fmt.Printf("Method Type NumMethod:%v \n", mt.NumMethod())
 }
