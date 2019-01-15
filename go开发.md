@@ -8,7 +8,7 @@ go当中生成Image的流程:
 
 下面是一个绘图的例子:
 
-```go
+```cgo
 func GerneratePng() {
 	const (
 		width  = 300
@@ -34,7 +34,7 @@ func GerneratePng() {
 
 图片格式转换:
 
-```go
+```cgo
 func Png2Jpeg() {
   	// 构建源文件和目标文件
 	srcFile, _ := os.Open("image.png")
@@ -57,7 +57,7 @@ func Png2Jpeg() {
 
 图片的创建:
 
-```go
+```cgo
 image包结构:
 type Image interface {
     // ColorModel方法返回图像的色彩模型
