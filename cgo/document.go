@@ -69,4 +69,47 @@ func SayHello(s *C.char)  {
 }
 ```
 
+3. 在go当中定义接口并调用(使用C语言)
+
+main.go
+```
+//#include <stdio.h>
+//static void SayHello(const char* s) {
+//    puts(s);
+//}
+
+import "C"
+
+func main() {
+	C.SayHello(C.CString("Hello, World\n"))
+}
+```
+
+说明: C++/C的关键字说明,参考 keyword.go
+
+说明: 在独立的C文件当中, 实现的方法如果需要被外部引用, 则格式为:
+
+```
+TYPE method(TYPE param, TYPE param, ...) {
+	// ...
+}
+
+例子:
+void say(const char* s) {
+	// ...
+}
+```
+
+下面的格式的函数只允许C内部使用.
+```
+static TYPE method(TYPE param, TYPE param, ...) {
+	// ...
+}
+
+例子:
+static void say(const char* s) {
+	// ...
+}
+```
+
 ************************************************************************************************************************/
