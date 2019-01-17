@@ -61,12 +61,12 @@ func main() {
           module.go (使用go实现)
 
 module.h
-```cgo
+```
 extern void SayHello(const char* str);
 ```
 
 module.go
-```cgo
+```
 package main
 
 import "C"
@@ -79,7 +79,7 @@ func SayHello(s *C.char)  {
 ```
 
 main.go (测试)
-```cgo
+```
 //#include <module.h>
 import "C"
 
@@ -98,7 +98,7 @@ func main() {
 函数的实现: module.go
 
 main.go
-```cgo
+```
 //extern void SayHello(const char* s);
 import "C"
 
@@ -108,7 +108,7 @@ func main() {
 ```
 
 module.go
-```cgo
+```
 package main
 
 import "C"
@@ -124,7 +124,7 @@ func SayHello(s *C.char)  {
 - 3.在go当中定义接口并调用(使用C语言)
 
 main.go
-```cgo
+```
 package main
 
 /*
@@ -150,7 +150,7 @@ func main() {
 链接阶段的参数主要是指定库文件检索路径和要链接的库文件.
 
 案例:
-```cgo
+```
 /*
 #cgo CFLAGS: -D PNG_DEBUG=1 -I ./include
 #cgo LDFLAGS: -L /usr/local/lib -l png
@@ -165,8 +165,8 @@ import "C"
 提示: 因为C/C++遗留的问题, C头文件检索目录可以是相对目录, 但是库文件检索目录则必须是绝对路径.
 在库文件的检索目录中可以通过 ${SRCDIR} 变量表示当前包目录的绝对路径:
 
-```cgo
-//#cgo LDFLAGS: -L ${SRCDIR}/libs -l foo
+```
+// #cgo LDFLAGS: -L ${SRCDIR}/libs -l foo
 ```
 
 `#cgo` 语句主要影响CFLAGS, CPPFLAGS, CXXFLAGS, FFLAGS 和 LDFLAGS 几个编译器环境变量.
@@ -182,8 +182,8 @@ C++的链接选项是通用的.
 
 案例:
 ```
-//#cgo windows CFLAGS: -D X86=1
-//#cgo !windows LDFLAGS: -l m
+// #cgo windows CFLAGS: -D X86=1
+// #cgo !windows LDFLAGS: -l m
 ```
 
 说明: windows平台下, 编译前预定义宏X86的值是1
@@ -202,8 +202,8 @@ build tag 是在Go/cgo环境下的C/C++文件开头的一种特殊注释.
 build tag 正是解决 `#cgo`存在的问题.
 
 案例: 源文件只有在设置debug构建标志才会被构建
-```cgo
-//+build debug
+```
+// +build debug
 package cgo
 
 var buildMode = "debug"
@@ -230,42 +230,27 @@ package cgo
 
 ### 基本数值类型
 
-+----------------------+----------------------+---------------------+
-|   C TYPE             |    CGO TYPE          |   GO TYPE           |
-+----------------------+----------------------+---------------------+
-|	char               |	C.char			  |	  byte				|
-+----------------------+----------------------+---------------------+
-|	signed char	       |    C.schar           |   int8              |
-+----------------------+----------------------+---------------------+
-|   unsigned char      |    C.uchar         　｜　　uint8   			|
-+----------------------+----------------------+---------------------+
-|	short			   |    C.short           |   int16             |
-+----------------------+----------------------+---------------------+
-|	unsigned short     |    C.ushort          |   uint16 			|
-+----------------------+----------------------+---------------------+
-|	int			       |    C.int             |   int32             |
-+----------------------+----------------------+---------------------+
-|	unsigned int       |    C.uint            |   uint32 			|
-+----------------------+----------------------+---------------------+
-|	long			   |    C.long            |   int32             |
-+----------------------+----------------------+---------------------+
-|	unsigned long      |    C.ulong           |   uint32 			|
-+----------------------+----------------------+---------------------+
-|	long long int	   |    C.longlong        |   int64             |
-+----------------------+----------------------+---------------------+
-|unsigned long long int|    C.ulonglong       |   uint64 			|
-+----------------------+----------------------+---------------------+
-|	float			   |    C.float           |   float32           |
-+----------------------+----------------------+---------------------+
-|	double             |    C.double          |   float64 			|
-+----------------------+----------------------+---------------------+
-|	size_t			   |    C.size_t          |   uint              |
-+----------------------+----------------------+---------------------+
+| C TYPE                 | CGO TYPE    | GO TYPE |
+| ---------------------- | ----------- | ------- |
+| char                   | C.char      | byte	 |
+| signed char	         | C.schar     | int8    |
+| unsigned char          | C.uchar     | uint8   |
+| short			         | C.short     | int16   |
+| unsigned short         | C.ushort    | uint16  |
+| int			         | C.int       | int32   |
+| unsigned int           | C.uint      | uint32  |
+| long			         | C.long      | int32   |
+| unsigned long          | C.ulong     | uint32  |
+| long long int	         | C.longlong  | int64   |
+| unsigned long long int | C.ulonglong | uint64  |
+| float			         | C.float     | float32 |
+| double                 | C.double    | float64 |
+| size_t			     | C.size_t    | uint    |
 
 
 ### 基本类型对应的C语言类型
 
-```cgo
+```
 typedef signed char GoInt8;
 typedef unsigned char GoUint8;
 typedef short GoInt16;
@@ -285,7 +270,7 @@ typedef double GoFloat64;
 在CGO生成的 _cgo_export.h 头文件中还会为Go语言字符串, 切片, 字典, 接口和管道等特有的数据类型
 对应的C语言类型:
 
-```cgo
+```
 typedef struct {
 	const char *p;
 	GoInt n;
@@ -307,17 +292,17 @@ typedef struct {
 ```
 
 案例:
-```cgo
-//export helloString
+```
+// export helloString
 func helloString(s string) {}
 
-//export helloSlice
+// export helloSlice
 func helloSlice(s []byte) {}
 ```
 
 CGO生成的 _cgo_export.h 头文件会包含以下的函数声明:
 
-```cgo
+```
 extern void helloString(GoString p0);
 extern void helloSlice(GoSlice p0);
 ```
@@ -334,7 +319,7 @@ C.struct_xxx 来访问C语言中定义的 struct xxx 结构体类型.
 64位Go语言环境C语言结构体也按照64位对齐规则. 对于指定了特殊对齐规则的结构体, 无法在CGO中
 访问.
 
-```cgo
+```
 /*
  struct A {
     int i;
@@ -358,7 +343,7 @@ func main() {
 元素, 但其中零长的数组成员所在的位置的偏移量可以通过 unsafe.Offset(a.arr) 来访问.
 
 案例:
-```cgo
+```
 /*
  struct A {
      int size:10; // todo: 位字段, 无法访问
@@ -383,18 +368,20 @@ func main() {
 对于联合类型, 通过C.union_xxx 来访问C语言中定义的 union xxx 类型. 但是在Go当中不支持C语言
 的联合类型, 它们会被转换为对于大小的字节数组.
 
-```cgo
-//#include <stdint.h>
-//
-//union B1 {
-//    int i;
-//    float f;
-//};
-//
-//union B2 {
-//    int8_t i8;
-//    int64_t i64;
-//};
+```
+/*
+ #include <stdint.h>
+
+ union B1 {
+    int i;
+    float f;
+ };
+
+ union B2 {
+    int8_t i8;
+    int64_t i64;
+ };
+*/
 import "C"
 import "fmt"
 
@@ -413,11 +400,13 @@ func main() {
 
 案例: unsafe强制转换
 ```
-//#include <stdint.h>
-//union B {
-//   int   i;
-//   float f;
-//};
+/*
+ #include <stdint.h>
+ union B {
+   int   i;
+   float f;
+ };
+*/
 import "C"
 import "fmt"
 
@@ -437,7 +426,7 @@ func main() {
 
 CGO辅助函数
 
-```cgo
+```
 // Go string to C string
 // C字符串使用malloc在C堆中分配, 调用者有责任安排释放它. 例如通过调用 C.free(如果需要C.free,请务必包含stdlib.h).
 func C.CString(string) *C.char
@@ -490,8 +479,8 @@ type SliceHeader struct {
 
 使用:
 ```
-//static char arr[10];
-//static char *s = "Hello";
+// static char arr[10];
+// static char *s = "Hello";
 import "C"
 import (
 	"fmt"
@@ -534,7 +523,7 @@ func main() {
 的是2个完全不同类型的指针间的转换, 原则上这种操作在纯Go语言代码是严格禁止的.
 
 案例:
-```cgo
+```
 var p *X
 var q *Y
 
