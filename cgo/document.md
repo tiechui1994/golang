@@ -572,3 +572,54 @@ pHdr.Cap = qHdr.Cap * unsafe.Sizeof(q[0]) / unsafe.Sizeof(p[0])
 ------------------------------------------------------------------------------------------------------------------------
 
 ## 函数调用
+
+### C 函数返回值
+
+对于有返回值的C函数, 我们可以正常获取返回值.
+
+C语言不支持返回多个结果, 因此<errno.h>标准库提供了一个errno宏用于返回
+错误状态. 可以近似地将errno看成一个线程安全的全局变量, 可以用于记录最近
+一次错误的状态码.
+
+```
+/*
+#include <errno.h>
+
+static int div(int a, int b) {
+    if(b == 0) {
+        errno = EINVAL;
+        return 0;
+    }
+    return a/b;
+}
+*/
+import "C"
+import "fmt"
+
+func main() {
+    v0, err0 := C.div(2, 1)
+    fmt.Println(v0, err0) // 2 <nil>
+
+    v1, err1 := C.div(1, 0)
+    fmt.Println(v1, err1) // 0 invalid argument
+}
+```
+
+### void函数的返回值
+
+C语言函数还有一种没有返回值类型的函数, 用void表示返回值类型. 一般情况下,
+我们无法获取void类型函数的返回值, 因为没有返回值可以获取.
+
+```
+// static void noreturn() {}
+import "C"
+import "fmt"
+
+func main() {
+    v, _ := C.noreturn()
+    fmt.Printf("%#v", v) // main._Ctype_void{}
+    fmt.Printf(C.noreturn()) // []
+}
+```
+C语言的void类型对应当前main包中的 _Ctype_void类型. 在CGO生成的代码中, _Ctype_void
+类型对应一个0长的数组类型 `[0]byte`.
