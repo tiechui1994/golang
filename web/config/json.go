@@ -11,9 +11,9 @@ import (
 )
 
 /**
- json方式的配置文件, 文件的解析和保存比较简单.
- Set()只支持单一深度的设置
- Get()支持多深度的获取
+json方式的配置文件, 文件的解析和保存比较简单.
+Set()只支持单一深度的设置
+Get()支持多深度的获取
 */
 
 // 实现了Config接口
@@ -41,7 +41,7 @@ func (js *JSONConfig) ParseData(data []byte) (Configer, error) {
 		data: make(map[string]interface{}),
 	}
 	err := json.Unmarshal(data, &x.data) // json对象
-	if err != nil { // 数组
+	if err != nil {                      // 数组
 		var wrappingArray []interface{}
 		err2 := json.Unmarshal(data, &wrappingArray)
 		if err2 != nil {

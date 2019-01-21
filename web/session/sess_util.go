@@ -1,29 +1,29 @@
 package session
 
 import (
-	"encoding/gob"
 	"bytes"
-	"io"
-	"crypto/rand"
-	"github.com/astaxie/beego/utils"
 	"crypto/cipher"
-	"fmt"
-	"time"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha1"
 	"crypto/subtle"
-	"strconv"
 	"encoding/base64"
+	"encoding/gob"
 	"errors"
+	"fmt"
+	"github.com/astaxie/beego/utils"
+	"io"
+	"strconv"
+	"time"
 )
 
 /**
-	gob包管理gob流 -- 在编码器(发送器) 和 解码器(接受器)之间交换的binary值.
-	一般用于传递远端程序调用(RPC)的参数和结果, 如net/rpc包就有提供.
+gob包管理gob流 -- 在编码器(发送器) 和 解码器(接受器)之间交换的binary值.
+一般用于传递远端程序调用(RPC)的参数和结果, 如net/rpc包就有提供.
 
-	Register(value interface{})
-	Register记录value下层具体值的类型和其名称. 该名称将用来识别发送或接受接口类型值时下层的具体类型.
-	本函数只应在初始化时调用, 如果类型和名字的映射不是一一对应的, 会panic.
+Register(value interface{})
+Register记录value下层具体值的类型和其名称. 该名称将用来识别发送或接受接口类型值时下层的具体类型.
+本函数只应在初始化时调用, 如果类型和名字的映射不是一一对应的, 会panic.
 */
 func init() {
 	gob.Register([]interface{}{})

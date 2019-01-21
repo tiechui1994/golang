@@ -120,7 +120,7 @@ func ExpandValueEnv(value string) (realValue string) {
 	for i := 2; i < vLen; i++ {
 		if value[i] == '|' && (i+1 < vLen && value[i+1] == '|') { // "||"情况
 			key = value[2:i]
-			defaultV = value[i+2: vLen-1]
+			defaultV = value[i+2 : vLen-1]
 			break
 		} else if value[i] == '}' { // 无 "||"
 			key = value[2:i]

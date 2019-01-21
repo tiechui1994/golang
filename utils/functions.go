@@ -2,15 +2,15 @@ package utils
 
 import (
 	"crypto/hmac"
+	crand "crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
+	mrand "math/rand"
 	"reflect"
 	"strings"
 	"time"
-	"encoding/hex"
-	mrand "math/rand"
-	crand "crypto/rand"
 )
 
 // 随机字符串

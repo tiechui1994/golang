@@ -8,7 +8,7 @@ import (
 
 // Log levels to control the logging output.
 const (
-	LevelEmergency     = iota
+	LevelEmergency = iota
 	LevelAlert
 	LevelCritical
 	LevelError

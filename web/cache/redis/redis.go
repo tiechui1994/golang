@@ -18,8 +18,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gomodule/redigo/redis"
 	"github.com/astaxie/beego/cache"
+	"github.com/gomodule/redigo/redis"
 )
 
 var (

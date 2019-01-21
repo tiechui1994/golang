@@ -1,15 +1,15 @@
 package logging
 
 import (
-	"strings"
-	"time"
-	"sync"
-	"os"
-	"runtime"
-	"path"
-	"strconv"
 	"fmt"
 	"log"
+	"os"
+	"path"
+	"runtime"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
 )
 
 //import "github.com/astaxie/beego/logs"
@@ -29,7 +29,7 @@ import (
 //
 
 const (
-	LevelEmergency     = iota
+	LevelEmergency = iota
 	LevelAlert
 	LevelCritical
 	LevelError
@@ -278,7 +278,7 @@ func (bl *BeeLogger) Write(p []byte) (n int, err error) {
 	}
 	// 写入日志总是在末尾添加'\n', 因此需要去掉末尾的'\n'
 	if p[len(p)-1] == '\n' {
-		p = p[0: len(p)-1]
+		p = p[0 : len(p)-1]
 	}
 
 	// set levelLoggerImpl to ensure all log message will be write out

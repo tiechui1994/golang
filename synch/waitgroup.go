@@ -1,8 +1,8 @@
 package synch
 
 import (
-	"unsafe"
 	"sync/atomic"
+	"unsafe"
 )
 
 /*

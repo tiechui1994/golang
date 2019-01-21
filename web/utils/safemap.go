@@ -5,7 +5,7 @@ import (
 )
 
 /**
- 高并发状况下的Map实现(加锁)
+高并发状况下的Map实现(加锁)
 */
 
 type BeeMap struct {

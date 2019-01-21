@@ -1,12 +1,12 @@
 package structs
 
 import (
-	"testing"
 	"fmt"
-	"unsafe"
-	"reflect"
-	"time"
 	"math/rand"
+	"reflect"
+	"testing"
+	"time"
+	"unsafe"
 )
 
 /*

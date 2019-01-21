@@ -1,13 +1,12 @@
 package waitgroup
 
 import (
-	"testing"
 	"runtime"
-	"sync/atomic"
 	"sync"
+	"sync/atomic"
+	"testing"
 	"time"
 )
-
 
 /*
 WaitGroup:
@@ -52,7 +51,7 @@ func TestWaitGroup(t *testing.T) {
 	for i := 0; i != 8; i++ {
 		testWaitGroup(t, wg1, wg2)
 	}
-	time.Sleep(10*time.Second)
+	time.Sleep(10 * time.Second)
 }
 
 func knownRacy(t *testing.T) {

@@ -1,22 +1,22 @@
 package main
 
 import (
-	"fmt"
-	"encoding/gob"
 	"bytes"
-	"encoding/base64"
-	"crypto/cipher"
-	crand "crypto/rand"
-	"errors"
 	"container/list"
 	"crypto/aes"
-	"os"
-	"time"
+	"crypto/cipher"
 	"crypto/hmac"
+	crand "crypto/rand"
 	"crypto/sha1"
-	"sync"
-	"unsafe"
+	"encoding/base64"
+	"encoding/gob"
+	"errors"
+	"fmt"
 	"github.com/astaxie/beego"
+	"os"
+	"sync"
+	"time"
+	"unsafe"
 )
 
 func generateRandomKey(length int) (data []byte) {

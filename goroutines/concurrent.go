@@ -2,7 +2,7 @@ package goroutines
 
 import (
 	"sync/atomic"
-	)
+)
 
 /*
 并发控制的模式:
@@ -36,4 +36,3 @@ func (c *ChannelGroup) Done() {
 func (c *ChannelGroup) Wait() {
 	<-c.channel
 }
-

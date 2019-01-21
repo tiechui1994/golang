@@ -1,9 +1,9 @@
 package utils
 
 import (
+	"fmt"
 	mathRand "math/rand"
 	"time"
-	"fmt"
 )
 
 /**

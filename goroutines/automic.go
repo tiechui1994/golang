@@ -1,8 +1,8 @@
 package goroutines
 
 import (
-	"sync"
 	"fmt"
+	"sync"
 	"time"
 )
 
@@ -179,8 +179,8 @@ Channel通信:
 */
 
 type (
-	subscriber chan interface{}        // 订阅在为一个管道
-	topicFunc func(v interface{}) bool //主题是一个过滤器
+	subscriber chan interface{}         // 订阅在为一个管道
+	topicFunc  func(v interface{}) bool //主题是一个过滤器
 )
 
 type Publisher struct {
@@ -269,7 +269,6 @@ func (p *Publisher) sendTopic(sub subscriber, topic topicFunc, v interface{}, wg
 	gatefs 对并发受控抽象了一个类型gate, 增加了enter和leave方法分别对应并发代码的进入和离开. 当超出并发数
 	量超过限制的时候, enter方法会阻塞直到并发数量降下来为止.
 */
-
 
 /*
 并发的安全退出:

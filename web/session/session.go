@@ -10,17 +10,17 @@
 package session
 
 import (
-	"net/http"
-	"os"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
 	"fmt"
+	"io"
+	"log"
+	"net/http"
 	"net/textproto"
 	"net/url"
+	"os"
 	"time"
-	"io"
-	"errors"
-	"log"
-	"encoding/hex"
-	"crypto/rand"
 )
 
 /**
@@ -52,6 +52,7 @@ type Provider interface {
 
 // 注册的Session引擎的实例, 一个Session引擎, 全局只有唯一的一个实例, 这个实例是在初始化之前已经创建
 var provides = make(map[string]Provider)
+
 // Session的log
 var SLogger = NewSessionLog(os.Stderr)
 
@@ -281,7 +282,7 @@ func (manager *Manager) SessionDestroy(w http.ResponseWriter, r *http.Request) {
 
 	sid, _ := url.QueryUnescape(cookie.Value)
 	manager.provider.SessionDestroy(sid) // 删除Session的存储数据
-	if manager.config.EnableSetCookie { // 删除Response的Cookie(删除客户端的Cookie)
+	if manager.config.EnableSetCookie {  // 删除Response的Cookie(删除客户端的Cookie)
 		expiration := time.Now()
 		cookie = &http.Cookie{
 			Name:     manager.config.CookieName,
@@ -322,11 +323,11 @@ func (manager *Manager) SessionRegenerateID(w http.ResponseWriter, r *http.Reque
 		//delete old cookie
 		session, _ = manager.provider.SessionRead(sid) //从Session当中获取Session的Store
 		cookie = &http.Cookie{Name: manager.config.CookieName,
-			Value: url.QueryEscape(sid),
-			Path: "/",
+			Value:    url.QueryEscape(sid),
+			Path:     "/",
 			HttpOnly: !manager.config.DisableHTTPOnly,
-			Secure: manager.isSecure(r),
-			Domain: manager.config.Domain,
+			Secure:   manager.isSecure(r),
+			Domain:   manager.config.Domain,
 		}
 	} else {
 		// 找到Cookie

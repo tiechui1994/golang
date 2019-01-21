@@ -1,11 +1,11 @@
 package details
 
 import (
-	"fmt"
-	"encoding/hex"
-	"time"
 	"crypto/rand"
+	"encoding/hex"
 	"errors"
+	"fmt"
+	"time"
 )
 
 // defer 执行顺序:

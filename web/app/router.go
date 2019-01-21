@@ -34,7 +34,7 @@ const (
 
 // 路由类型
 const (
-	routerTypeBeego   = iota
+	routerTypeBeego = iota
 	routerTypeRESTFul
 	routerTypeHandler
 )
@@ -554,8 +554,7 @@ func (p *ControllerRegister) geturl(tree *Tree, url, controllerName, methodName 
 				if HTTPMETHOD[strings.ToUpper(methodName)] {
 					if len(c.methods) == 0 {
 						find = true
-					} else if method, ok := c.methods[strings.ToUpper(methodName)];
-						ok && method == strings.ToUpper(methodName) {
+					} else if method, ok := c.methods[strings.ToUpper(methodName)]; ok && method == strings.ToUpper(methodName) {
 						find = true
 					} else if method, ok = c.methods["*"]; ok && method == methodName {
 						find = true
@@ -910,7 +909,7 @@ func (p *ControllerRegister) ServeHTTP(rw http.ResponseWriter, r *http.Request) 
 	}
 
 Admin:
-//admin module record QPS
+	//admin module record QPS
 
 	statusCode := context.ResponseWriter.Status
 	if statusCode == 0 {

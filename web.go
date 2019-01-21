@@ -1,11 +1,11 @@
 package main
 
 import (
-	"strings"
-	"regexp"
 	"fmt"
-	"reflect"
 	"path"
+	"reflect"
+	"regexp"
+	"strings"
 )
 
 func splitSegment(key string) (bool, []string, string) {

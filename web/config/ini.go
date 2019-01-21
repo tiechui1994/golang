@@ -106,7 +106,7 @@ func (ini *IniConfig) parseData(dir string, data []byte) (*IniConfigContainer, e
 		}
 		if bComment != nil {
 			line = bytes.TrimLeft(line, string(bComment)) // 只是保存注释内容
-			if comment.Len() > 0 { // 多行注释情况,需要手动添加换行符
+			if comment.Len() > 0 {                        // 多行注释情况,需要手动添加换行符
 				comment.WriteByte('\n')
 			}
 			comment.Write(line)
@@ -115,7 +115,7 @@ func (ini *IniConfig) parseData(dir string, data []byte) (*IniConfigContainer, e
 
 		// 第3步: section行
 		if bytes.HasPrefix(line, sectionStart) && bytes.HasSuffix(line, sectionEnd) {
-			section = strings.ToLower(string(line[1: len(line)-1])) // 获取小写的section名称
+			section = strings.ToLower(string(line[1 : len(line)-1])) // 获取小写的section名称
 			if comment.Len() > 0 {
 				cfg.sectionComment[section] = comment.String() // 存储section注释
 				comment.Reset()                                // 很关键, 重置为空

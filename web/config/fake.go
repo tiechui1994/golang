@@ -7,8 +7,8 @@ import (
 )
 
 /**
- 基于内存方式的Config存储, 不提供文件的落地, 以及文件的解析.
- 在运行时手动构建存储
+基于内存方式的Config存储, 不提供文件的落地, 以及文件的解析.
+在运行时手动构建存储
 */
 
 type fakeConfigContainer struct {

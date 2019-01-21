@@ -2,13 +2,13 @@ package env
 
 import (
 	"fmt"
+	"golang/web/utils"
 	"os"
 	"strings"
-	"golang/web/utils"
 )
 
 /**
- 加载系统环境变量作为配置文件.
+加载系统环境变量作为配置文件.
 */
 
 var env *utils.BeeMap

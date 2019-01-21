@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"time"
 )
+
 // 深层拷贝, 效率高于gob流的方式
 func DeepCopy(src, dst interface{}) {
 	if src == nil {

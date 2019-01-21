@@ -1,10 +1,10 @@
 package goroutines
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 	"time"
-	"strings"
-	"fmt"
 )
 
 func TestWorker(t *testing.T) {

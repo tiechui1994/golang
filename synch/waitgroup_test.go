@@ -1,11 +1,11 @@
 package synch
 
 import (
-	"testing"
-	"runtime"
-	"sync/atomic"
 	"fmt"
+	"runtime"
 	"sync"
+	"sync/atomic"
+	"testing"
 )
 
 /*

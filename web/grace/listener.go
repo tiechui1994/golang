@@ -56,7 +56,7 @@ func (gl *graceListener) Close() error {
 	if gl.stopped {
 		return syscall.EINVAL
 	}
-	gl.stop <- nil // 解除启动时的阻塞
+	gl.stop <- nil   // 解除启动时的阻塞
 	return <-gl.stop // 阻塞返回
 }
 

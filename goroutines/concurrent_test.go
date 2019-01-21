@@ -1,9 +1,9 @@
 package goroutines
 
 import (
-	"testing"
 	"fmt"
 	"sync"
+	"testing"
 )
 
 /*

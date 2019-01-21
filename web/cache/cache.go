@@ -43,6 +43,7 @@ type Cache interface {
 
 // 采用自定义注册的方式实现
 type Instance func() Cache
+
 var adapters = make(map[string]Instance)
 
 // 注册一个Cache引擎

@@ -1,8 +1,8 @@
 package pool
 
 import (
-	"time"
 	"reflect"
+	"time"
 )
 
 type job struct {

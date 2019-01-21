@@ -10,9 +10,10 @@ import (
 )
 
 var cookiepder = &CookieProvider{}
+
 /**
-	核心内容: SessionID 等价于 SessionStore实例 (加密与解密实现)
-	获取任何一个都可以得到另外一个.
+核心内容: SessionID 等价于 SessionStore实例 (加密与解密实现)
+获取任何一个都可以得到另外一个.
 */
 
 // Cookie存储结构: 解决存储问题

@@ -1,8 +1,8 @@
 package main
 
 import (
-	_ "net/http"
 	"gosource/lib"
+	_ "net/http"
 )
 
 func init() {

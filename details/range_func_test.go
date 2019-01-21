@@ -1,8 +1,8 @@
 package details
 
 import (
-	"testing"
 	"fmt"
+	"testing"
 )
 
 func TestDeferExecute(t *testing.T) {

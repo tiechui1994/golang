@@ -17,8 +17,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gomodule/redigo/redis"
 	"github.com/astaxie/beego/session"
+	"github.com/gomodule/redigo/redis"
 )
 
 var redispder = &Provider{}

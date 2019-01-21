@@ -1,25 +1,25 @@
 package logging
 
 import (
-	"time"
-	"strings"
-	"path/filepath"
-	"os"
-	"sync"
-	"strconv"
-	"path"
-	"io"
 	"bytes"
-	"fmt"
-	"errors"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
 )
 
 // 文件日志, 核心是将日志写入到文件当中, 并且还要应对复杂情况下日志文件分割
 // 实现了Logger接口
 type fileLogWriter struct {
-	sync.RWMutex // 写入日志时原子性修改 maxLinesCurLines 和 maxSizeCurSize 变量
-	Level int `json:"level"`
+	sync.RWMutex     // 写入日志时原子性修改 maxLinesCurLines 和 maxSizeCurSize 变量
+	Level        int `json:"level"`
 
 	// 写入的文件信息
 	Filename             string `json:"filename"`
@@ -37,8 +37,8 @@ type fileLogWriter struct {
 	maxSizeCurSize int
 
 	// 按照天数进行轮询
-	Daily         bool  `json:"daily"`
-	MaxDays       int64 `json:"maxdays"`
+	Daily         bool      `json:"daily"`
+	MaxDays       int64     `json:"maxdays"`
 	dailyOpenDate int       // 文件打开日期
 	dailyOpenTime time.Time // 文件打开时间
 
@@ -407,14 +407,14 @@ func (w *fileLogWriter) deleteOldLog() {
 			return
 		}
 		if w.Hourly {
-			if !info.IsDir() && info.ModTime().Add(1 * time.Hour * time.Duration(w.MaxHours)).Before(time.Now()) {
+			if !info.IsDir() && info.ModTime().Add(1*time.Hour*time.Duration(w.MaxHours)).Before(time.Now()) {
 				if strings.HasPrefix(filepath.Base(path), filepath.Base(w.fileNameOnly)) &&
 					strings.HasSuffix(filepath.Base(path), w.suffix) {
 					os.Remove(path)
 				}
 			}
 		} else if w.Daily {
-			if !info.IsDir() && info.ModTime().Add(24 * time.Hour * time.Duration(w.MaxDays)).Before(time.Now()) {
+			if !info.IsDir() && info.ModTime().Add(24*time.Hour*time.Duration(w.MaxDays)).Before(time.Now()) {
 				if strings.HasPrefix(filepath.Base(path), filepath.Base(w.fileNameOnly)) &&
 					strings.HasSuffix(filepath.Base(path), w.suffix) {
 					os.Remove(path)
