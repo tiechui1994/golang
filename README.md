@@ -1,5 +1,7 @@
 # golang 包解构说明
 
+- access 权限访问控制, casbin源代码解析 
+
 - cgo go与C/C++进行互相调用API
 
 - details go使用过程的细节坑
