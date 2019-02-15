@@ -3,6 +3,15 @@ package access
 /*
 - config: 主要是基于ini的类型, 核心是map存储+常用的类型转换
 
+核心存储结构: map[string]map[string]string, 即 section: key=value
+
+其中:
+	section: request_definition, policy_definition, role_definition, policy_effect, matchers
+	key: r, p, g(g2,g3,...), e, m
+	value: ...
+
+
+
 - effect: 决策
 
 type Effector interface {
@@ -16,6 +25,21 @@ type Effector interface {
 
 - model: 模型
 
+// Model: 整个访问控制模型.
+type Model map[string]AssertionMap
+
+// AssertionMap是断言的集合, 可以是"r","p","g","e","m".
+type AssertionMap map[string]*Assertion
+
+// Assertion: 模型的一部分中的表达式.
+// For example: r = sub, obj, act
+type Assertion struct {
+	Key    string
+	Value  string
+	Tokens []string
+	Policy [][]string
+	RM     rbac.RoleManager
+}
 
 
 - rbac: 对于RBAC模型的特殊支持
@@ -52,7 +76,7 @@ type Adapter interface {
 	SavePolicy(model model.Model) error
 
 
-	// 将策略规则添加到存储。
+	// 将策略规则添加到存储.
     // 这是自动保存功能的一部分
 	AddPolicy(sec string, ptype string, rule []string) error
 	// 从存储当中删除策略规则
@@ -77,4 +101,26 @@ type Watcher interface {
 
 
 - Enforcer: 执行器, 整个casbin工作的核心结构体
+
+NewEnforcer(params ...interface{})
+参数说明:
+	enableLog: 是否启动log
+
+	modelPath: 配置路径
+	enableLog: 是否启动log
+
+	model: Model
+	enableLog: 是否启动log
+
+	modelPath: 配置路径
+	policyPath: 策略文件路径
+	enableLog: 是否启动log
+
+	modelPath: 配置路径
+	adapter: Adapter
+	enableLog: 是否启动log
+
+	model: Model
+	adapter: Adapter
+	enableLog: 是否启动log
 */
