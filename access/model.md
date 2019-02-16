@@ -7,6 +7,7 @@
 
 - Model CONF 可以包含注释. 注释以`#`开头, `#`将注释整行.
 
+
 ## request 定义
 
 `[request_definition]` 部分用于request的定义, 它明确了 `e.Enforce()` 函数中参数的含义.
@@ -19,6 +20,7 @@ r = sub, obj, act
 `sub, obj, act`表示经典三元组: 访问实体(Subject), 访问资源(Object) 和 访问方法(Action).
 但是, 可以自定义自己的请求表单, 如果不需要指定特定资源, 则可以这样定义 `sub, act`, 或者如果有两个
 访问实体, 则为 `sub sub2, obj, act`
+
 
 ## policy定义
 
@@ -171,6 +173,7 @@ e.AddFunction("my_func", KeyMatchFunc)
 m = r.sub == p.sub && my_func(r.obj, p.obj) && r.act == p.act
 ```
 
+
 ## role 定义
 
 `[role_definition]`原语定义了RBAC中的角色继承关系.casbin支持RBAC系统的多个实例, 例如, 用户可以有角色和继承关系,
@@ -214,6 +217,7 @@ casbin无法得出这个字面量到底指代用户 alice 还是角色 alice. �
 问题便可迎刃而解.
 4.假设A具有角色B, B具有角色C,并且A有角色C, 这种传递性在当前版本会造成死循环.
 ```
+
 
 ## 域租户的角色定义
 

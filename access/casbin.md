@@ -136,3 +136,5 @@ NewEnforcer(params ...interface{})
 	adapter: Adapter
 	enableLog: 是否启动log
 ```
+
+
