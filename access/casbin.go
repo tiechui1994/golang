@@ -102,6 +102,22 @@ type Watcher interface {
 
 - Enforcer: 执行器, 整个casbin工作的核心结构体
 
+type Enforcer struct {
+	modelPath string             // model的配置文件路径
+	model     model.Model	     // model配置文件加载的后形成的Model
+	fm        model.FunctionMap  // model当中使用的函数
+	eft       effect.Effector    // 决策器, 默认是 effect.DefaultEffector
+
+	adapter persist.Adapter // 适配器, 主要是针对Policy变更或者存储的变化, casbin自身实现了基于文件的Adaptec
+	watcher persist.Watcher // 监测
+	rm      rbac.RoleManager // 针对RBAC模型
+
+	enabled            bool	// casbin状态(是否可用), 当不可用时所有的请求决策都是允许. true
+	autoSave           bool // 针对Policy改变是否自动保存. true
+	autoBuildRoleLinks bool // 自动构建角色的继承关系. true
+}
+
+// 构建决策实例
 NewEnforcer(params ...interface{})
 参数说明:
 	enableLog: 是否启动log
@@ -123,4 +139,10 @@ NewEnforcer(params ...interface{})
 	model: Model
 	adapter: Adapter
 	enableLog: 是否启动log
+
+// 决策
+Enforce(rvals ...interface{})
+1)使用govaluate构建表达式
+2)使用policy解析matcher, 得到一个个决策结果
+3)汇总决策结果, 返回
 */
