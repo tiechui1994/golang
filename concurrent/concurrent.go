@@ -1,4 +1,4 @@
-package goroutines
+package concurrent
 
 import (
 	"sync/atomic"

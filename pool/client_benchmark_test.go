@@ -77,7 +77,7 @@ func BenchmarkPoolWithFunc(b *testing.B) {
 			p.Submit(job)
 		}
 		wg.Wait()
-		//b.Logf("running goroutines: %d", p.Running())
+		//b.Logf("running concurrent: %d", p.Running())
 	}
 	b.StopTimer()
 }

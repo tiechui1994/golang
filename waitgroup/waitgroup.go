@@ -1,4 +1,4 @@
-package synch
+package waitgroup
 
 import (
 	"sync/atomic"
