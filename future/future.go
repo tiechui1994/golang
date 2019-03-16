@@ -288,6 +288,7 @@ func (future *Future) setResult(r *PromiseResult) (e error) { //r *PromiseResult
 
 		// todo: 使用 CAS 操作确保Promise的state没有发生改变
 		// todo: 如果state发生, 必须获取最新的state并且尝试再次调用 CAS
+		// todo: 原理方面的内容需要加深理解
 		if atomic.CompareAndSwapPointer(&future.val, unsafe.Pointer(v), unsafe.Pointer(&newVal)) {
 			// 关闭 final 确保 Get() 和 GetOrTimeout() 不再阻塞
 			close(future.final)
@@ -315,14 +316,13 @@ func (future *Future) setResult(r *PromiseResult) (e error) { //r *PromiseResult
 	return
 }
 
-// handleOneCallback registers a callback function
+// 注册回调函数
 func (future *Future) addCallback(callback interface{}, t callbackType) {
 	if callback == nil {
 		return
 	}
-	if (t == CALLBACK_DONE) ||
-		(t == CALLBACK_FAIL) ||
-		(t == CALLBACK_ALWAYS) {
+	// 回调函数类型和回调函数要匹配
+	if (t == CALLBACK_DONE) || (t == CALLBACK_FAIL) || (t == CALLBACK_ALWAYS) {
 		if _, ok := callback.(func(v interface{})); !ok {
 			panic(errors.New("callback function spec must be func(v interface{})"))
 		}
@@ -332,6 +332,7 @@ func (future *Future) addCallback(callback interface{}, t callbackType) {
 		}
 	}
 
+	// 异步执行
 	for {
 		v := future.loadVal()
 		r := v.result
@@ -348,12 +349,12 @@ func (future *Future) addCallback(callback interface{}, t callbackType) {
 				newVal.cancels = append(newVal.cancels, callback.(func()))
 			}
 
-			//use CAS to ensure that the state of Future is not changed,
-			//if the state is changed, will retry CAS operation.
+			// 使用CAS确保Future的state未发生改变. 如果state发生改变, 会尝试CAS操作(函数返回的关键)
 			if atomic.CompareAndSwapPointer(&future.val, unsafe.Pointer(v), unsafe.Pointer(&newVal)) {
 				break
 			}
 		} else {
+			// 执行回调函数
 			if (t == CALLBACK_DONE && r.Type == RESULT_SUCCESS) ||
 				(t == CALLBACK_FAIL && r.Type == RESULT_FAILURE) ||
 				(t == CALLBACK_ALWAYS && r.Type != RESULT_CANCELLED) {

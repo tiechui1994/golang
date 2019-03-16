@@ -9,63 +9,57 @@ type anyPromiseResult struct {
 	i      int
 }
 
-//Start start a goroutines to execute task function
-//and return a Future that presents the result.
-//If option paramter is true, the act function will be sync called.
-//Type of act can be any of below four types:
-//  func() (r interface{}, err error):
-//     if err returned by act != nil or panic error, then Future will be rejected with error,
-//     otherwise be resolved with r.
-//  func():
-//     if act panic error, then Future will be rejected, otherwise be resolved with nil.
-//  func(c promise.Canceller) (r interface{}, err error):
-//     if err returned by act != nil or panic error,
-//     then Future will be rejected with err, otherwise be resolved with r.
-//     We can check c.IsCancelled() to decide whether need to exit act function
-//  func(promise.Canceller):
-//     if act panic error, then Future will be rejected with error, otherwise be resolved with nil.
-//     We can check c.IsCancelled() to decide whether need to exit act function.
-//  error:
-//     Future will be rejected with error immediately
-//  other value:
-//     Future will be resolved with value immediately
-func Start(act interface{}, syncs ...bool) *Future {
-	pr := NewPromise()
-	if f, ok := act.(*Future); ok {
+/**************************************************************
+开启一个goroutine用来执行一个act函数并返回一个Future(act执行的结果).
+如果option参数是true, act函数会被异步调用.
+
+act的函数类型可以是以下4种:
+  func() (r interface{}, err error)
+
+  func()
+
+  func(c promise.Canceller) (r interface{}, err error)
+     c可以调用c.IsCancelled()方法退出函数执行
+
+  func(promise.Canceller)
+***************************************************************/
+func Start(action interface{}, syncs ...bool) *Future {
+	promise := NewPromise()
+	if f, ok := action.(*Future); ok {
 		return f
 	}
 
-	if action := getAct(pr, act); action != nil {
+	if proxy := getAction(promise, action); proxy != nil {
 		if syncs != nil && len(syncs) > 0 && !syncs[0] {
-			//sync call
-			r, err := action()
-			if pr.IsCancelled() {
-				pr.Cancel()
+			// 同步调用
+			result, err := proxy()
+			if promise.IsCancelled() {
+				promise.Cancel()
 			} else {
 				if err == nil {
-					pr.Resolve(r)
+					promise.Resolve(result)
 				} else {
-					pr.Reject(err)
+					promise.Reject(err)
 				}
 			}
 		} else {
-			//async call
+			// 异步调用
 			go func() {
-				r, err := action()
-				if pr.IsCancelled() {
-					pr.Cancel()
+				r, err := proxy()
+				if promise.IsCancelled() {
+					promise.Cancel()
 				} else {
 					if err == nil {
-						pr.Resolve(r)
+						promise.Resolve(r)
 					} else {
-						pr.Reject(err)
+						promise.Reject(err)
 					}
 				}
 			}()
 		}
 	}
 
-	return pr.Future
+	return promise.Future
 }
 
 //Wrap return a Future that presents the wrapped value

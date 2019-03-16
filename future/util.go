@@ -86,49 +86,49 @@ func newErrorWithStacks(i interface{}) (e error) {
 	return errors.New(buf.String())
 }
 
-func getAct(pr *Promise, act interface{}) (f func() (r interface{}, err error)) {
+// 对action进行代理包装
+func getAction(promise *Promise, action interface{}) (proxy func() (r interface{}, err error)) {
 	var (
-		act1 func() (interface{}, error)
-		act2 func(Canceller) (interface{}, error)
+		func1 func() (interface{}, error)
+		func2 func(Canceller) (interface{}, error)
 	)
 	canCancel := false
 
-	//convert the act to the function that has return value and error if act function haven't return value and error
-	switch v := act.(type) {
+	// 包装action函数: func([Canceller]) (interface{}, error)
+	switch v := action.(type) {
 	case func() (interface{}, error):
-		act1 = v
+		func1 = v
 	case func(Canceller) (interface{}, error):
 		canCancel = true
-		act2 = v
+		func2 = v
 	case func():
-		act1 = func() (interface{}, error) {
+		func1 = func() (interface{}, error) {
 			v()
 			return nil, nil
 		}
 	case func(Canceller):
 		canCancel = true
-		act2 = func(canceller Canceller) (interface{}, error) {
+		func2 = func(canceller Canceller) (interface{}, error) {
 			v(canceller)
 			return nil, nil
 		}
 	default:
 		if e, ok := v.(error); !ok {
-			pr.Resolve(v)
+			promise.Resolve(v)
 		} else {
-			pr.Reject(e)
+			promise.Reject(e)
 		}
 		return nil
 	}
 
-	//If paramters of act function has a Canceller interface, the Future will can be cancelled.
+	// 当action函数带有参数Canceller, 则Future将来可以被取消
 	var canceller Canceller = nil
-	if pr != nil && canCancel {
-		//pr.EnableCanceller()
-		canceller = pr.Canceller()
+	if promise != nil && canCancel {
+		canceller = promise.Canceller()
 	}
 
-	//return proxy function of act function
-	f = func() (r interface{}, err error) {
+	// 返回代理action的函数
+	proxy = func() (result interface{}, err error) {
 		defer func() {
 			if e := recover(); e != nil {
 				err = newErrorWithStacks(e)
@@ -136,14 +136,15 @@ func getAct(pr *Promise, act interface{}) (f func() (r interface{}, err error)) 
 		}()
 
 		if canCancel {
-			r, err = act2(canceller)
+			result, err = func2(canceller)
 		} else {
-			r, err = act1()
+			result, err = func1()
 		}
 
-		return
+		return result, err
 	}
-	return
+
+	return proxy
 }
 
 func startPipe(r *PromiseResult, pipeTask func(v interface{}) *Future, pipePromise *Promise) {
