@@ -76,6 +76,18 @@ func (future *Future) Canceller() Canceller {
 	return &canceller{future}
 }
 
+//  Point -> Object -> Field
+func (future *Future) loadResult() *PromiseResult {
+	val := future.loadVal()
+	return val.result
+}
+
+// Point -> Object的转换
+func (future *Future) loadVal() *futureVal {
+	r := atomic.LoadPointer(&future.val)
+	return (*futureVal)(r)
+}
+
 func (future *Future) IsCancelled() bool {
 	val := future.loadVal()
 
@@ -101,7 +113,7 @@ func (future *Future) SetTimeout(mm int) *Future {
 	return future
 }
 
-//GetChan returns a channel than can be used to receive result of Promise
+// 返回一个 chan PromiseResult, 是Promise的结果
 func (future *Future) GetChan() <-chan *PromiseResult {
 	c := make(chan *PromiseResult, 1)
 	future.OnComplete(func(v interface{}) {
@@ -112,18 +124,13 @@ func (future *Future) GetChan() <-chan *PromiseResult {
 	return c
 }
 
-//Get will block current goroutines until the Future is resolved/rejected/cancelled.
-//If Future is resolved, value and nil will be returned
-//If Future is rejected, nil and error will be returned.
-//If Future is cancelled, nil and CANCELLED error will be returned.
+// todo: 获取 Future 的结果, 一直阻塞调用, 直到有结果返回, 需要重点解析 getFutureReturnVal() 方法
 func (future *Future) Get() (val interface{}, err error) {
 	<-future.final
 	return getFutureReturnVal(future.loadResult())
 }
 
-//GetOrTimeout is similar to Get(), but GetOrTimeout will not block after timeout.
-//If GetOrTimeout returns with a timeout, timeout value will be true in return values.
-//The unit of paramter is millisecond.
+// todo: 类似Get()方法, 阻塞的时间最多是 mm 毫秒, 就会有返回结果
 func (future *Future) GetOrTimeout(mm uint) (val interface{}, err error, timout bool) {
 	if mm == 0 {
 		mm = 10
@@ -140,49 +147,38 @@ func (future *Future) GetOrTimeout(mm uint) (val interface{}, err error, timout 
 	}
 }
 
-//Cancel sets the status of promise to RESULT_CANCELLED.
-//If promise is cancelled, Get() will return nil and CANCELLED error.
-//All callback functions will be not called if Promise is cancalled.
+// 设置 Promise 的状态为 RESULT_CANCELLED
 func (future *Future) Cancel() (e error) {
 	return future.setResult(&PromiseResult{CANCELLED, RESULT_CANCELLED})
 }
 
-//OnSuccess registers a callback function that will be called when Promise is resolved.
-//If promise is already resolved, the callback will immediately called.
-//The value of Promise will be paramter of Done callback function.
+// 注册成功返回的回调函数
 func (future *Future) OnSuccess(callback func(v interface{})) *Future {
 	future.addCallback(callback, CALLBACK_DONE)
 	return future
 }
 
-//OnFailure registers a callback function that will be called when Promise is rejected.
-//If promise is already rejected, the callback will immediately called.
-//The error of Promise will be paramter of Fail callback function.
+// 注册失败返回的回调函数
 func (future *Future) OnFailure(callback func(v interface{})) *Future {
 	future.addCallback(callback, CALLBACK_FAIL)
 	return future
 }
 
-//OnComplete register a callback function that will be called when Promise is rejected or resolved.
-//If promise is already rejected or resolved, the callback will immediately called.
-//According to the status of Promise, value or error will be paramter of Always callback function.
-//Value is the paramter if Promise is resolved, or error is the paramter if Promise is rejected.
-//Always callback will be not called if Promise be called.
+// 注册 Promise 有返回(不论成功或者失败)结果的回调函数
 func (future *Future) OnComplete(callback func(v interface{})) *Future {
 	future.addCallback(callback, CALLBACK_ALWAYS)
 	return future
 }
 
-//OnCancel registers a callback function that will be called when Promise is cancelled.
-//If promise is already cancelled, the callback will immediately called.
+// 注册Promise取消的回调函数
 func (future *Future) OnCancel(callback func()) *Future {
 	future.addCallback(callback, CALLBACK_CANCEL)
 	return future
 }
 
-//Pipe registers one or two functions that returns a Future, and returns a proxy of pipeline Future.
-//First function will be called when Future is resolved, the returned Future will be as pipeline Future.
-//Secondary function will be called when Futrue is rejected, the returned Future will be as pipeline Future.
+// 注册 一个或者两个回调函数. 并且返回 代理的 Futura
+// 当Future成功返回, 第一个回调函数被调用
+// 当Future失败返回, 第二个回调函数被调用
 func (future *Future) Pipe(callbacks ...interface{}) (result *Future, ok bool) {
 	if len(callbacks) == 0 ||
 		(len(callbacks) == 1 && callbacks[0] == nil) ||
@@ -191,41 +187,47 @@ func (future *Future) Pipe(callbacks ...interface{}) (result *Future, ok bool) {
 		return
 	}
 
-	//ensure all callback functions match the spec "func(v interface{}) *Future"
+	//todo: 验证回调函数的格式 "func(v interface{}) *Future"
 	cs := make([]func(v interface{}) *Future, len(callbacks), len(callbacks))
 	for i, callback := range callbacks {
-		if c, ok1 := callback.(func(v interface{}) *Future); ok1 {
-			cs[i] = c
-		} else if c, ok1 := callback.(func() *Future); ok1 {
+		if function, status := callback.(func(v interface{}) *Future); status {
+			cs[i] = function
+
+		} else if function, status := callback.(func() *Future); status {
 			cs[i] = func(v interface{}) *Future {
-				return c()
+				return function()
 			}
-		} else if c, ok1 := callback.(func(v interface{})); ok1 {
+
+		} else if function, status := callback.(func(v interface{})); status {
 			cs[i] = func(v interface{}) *Future {
 				return Start(func() {
-					c(v)
+					function(v)
 				})
 			}
-		} else if c, ok1 := callback.(func(v interface{}) (r interface{}, err error)); ok1 {
+
+		} else if function, status := callback.(func(v interface{}) (r interface{}, err error)); status {
 			cs[i] = func(v interface{}) *Future {
 				return Start(func() (r interface{}, err error) {
-					r, err = c(v)
+					r, err = function(v)
 					return
 				})
 			}
-		} else if c, ok1 := callback.(func()); ok1 {
+
+		} else if function, status := callback.(func()); status {
 			cs[i] = func(v interface{}) *Future {
 				return Start(func() {
-					c()
+					function()
 				})
 			}
-		} else if c, ok1 := callback.(func() (r interface{}, err error)); ok1 {
+
+		} else if function, status := callback.(func() (r interface{}, err error)); status {
 			cs[i] = func(v interface{}) *Future {
 				return Start(func() (r interface{}, err error) {
-					r, err = c()
+					r, err = function()
 					return
 				})
 			}
+
 		} else {
 			ok = false
 			return
@@ -253,8 +255,7 @@ func (future *Future) Pipe(callbacks ...interface{}) (result *Future, ok bool) {
 			newVal := *v
 			newVal.pipes = append(newVal.pipes, newPipe)
 
-			//use CAS to ensure that the state of Future is not changed,
-			//if the state is changed, will retry CAS operation.
+			// TODO: 使用 CAS 确保Future的state没有发生改变. 如果state发生改变, 将尝试CAS操作
 			if atomic.CompareAndSwapPointer(&future.val, unsafe.Pointer(v), unsafe.Pointer(&newVal)) {
 				result = newPipe.pipePromise.Future
 				break
@@ -266,19 +267,7 @@ func (future *Future) Pipe(callbacks ...interface{}) (result *Future, ok bool) {
 	return
 }
 
-//  Point -> Object -> Field
-func (future *Future) loadResult() *PromiseResult {
-	val := future.loadVal()
-	return val.result
-}
-
-// Point -> Object的转换
-func (future *Future) loadVal() *futureVal {
-	r := atomic.LoadPointer(&future.val)
-	return (*futureVal)(r)
-}
-
-//setResult sets the value and final status of Promise, it will only be executed for once
+// 设置 Promise 最终的状态和结果, 只能被执行一次
 func (future *Future) setResult(r *PromiseResult) (e error) { //r *PromiseResult) {
 	defer func() {
 		if err := getError(recover()); err != nil {
@@ -297,21 +286,20 @@ func (future *Future) setResult(r *PromiseResult) (e error) { //r *PromiseResult
 		newVal := *v
 		newVal.result = r
 
-		//Use CAS operation to ensure that the state of Promise isn't changed.
-		//If the state is changed, must get latest state and try to call CAS again.
-		//No ABA issue in future case because address of all objects are different.
+		// todo: 使用 CAS 操作确保Promise的state没有发生改变
+		// todo: 如果state发生, 必须获取最新的state并且尝试再次调用 CAS
 		if atomic.CompareAndSwapPointer(&future.val, unsafe.Pointer(v), unsafe.Pointer(&newVal)) {
-			//Close chEnd then all Get() and GetOrTimeout() will be unblocked
+			// 关闭 final 确保 Get() 和 GetOrTimeout() 不再阻塞
 			close(future.final)
 
-			//call callback functions and start the Promise pipeline
+			// call callback functions and start the Promise pipeline
 			if len(v.dones) > 0 || len(v.fails) > 0 || len(v.always) > 0 || len(v.cancels) > 0 {
 				go func() {
 					execCallback(r, v.dones, v.fails, v.always, v.cancels)
 				}()
 			}
 
-			//start the pipeline
+			// start the pipeline
 			if len(v.pipes) > 0 {
 				go func() {
 					for _, pipe := range v.pipes {
@@ -327,7 +315,7 @@ func (future *Future) setResult(r *PromiseResult) (e error) { //r *PromiseResult
 	return
 }
 
-//handleOneCallback registers a callback function
+// handleOneCallback registers a callback function
 func (future *Future) addCallback(callback interface{}, t callbackType) {
 	if callback == nil {
 		return
