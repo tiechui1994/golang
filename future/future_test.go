@@ -35,6 +35,7 @@ func newMyError(v interface{}) *myError {
 	return &myError{v}
 }
 
+// Promise最简单的使用 Resolve | Reject
 func TestResolveAndReject(t *testing.T) {
 	convey.Convey("When Promise is resolved", t, func() {
 		p := NewPromise()
@@ -42,9 +43,10 @@ func TestResolveAndReject(t *testing.T) {
 			time.Sleep(50 * time.Millisecond)
 			p.Resolve("ok")
 		}()
+
 		convey.Convey("Should return the argument of Resolve", func() {
-			r, err := p.Get()
-			convey.So(r, convey.ShouldEqual, "ok")
+			val, err := p.Get()
+			convey.So(val, convey.ShouldEqual, "ok")
 			convey.So(err, convey.ShouldBeNil)
 		})
 	})
@@ -55,14 +57,16 @@ func TestResolveAndReject(t *testing.T) {
 			time.Sleep(50 * time.Millisecond)
 			p.Reject(errors.New("fail"))
 		}()
+
 		convey.Convey("Should return error", func() {
-			r, err := p.Get()
+			val, err := p.Get()
 			convey.So(err, convey.ShouldNotBeNil)
-			convey.So(r, convey.ShouldEqual, nil)
+			convey.So(val, convey.ShouldEqual, nil)
 		})
 	})
 }
 
+// Promise最简单的使用 Cancel
 func TestCancel(t *testing.T) {
 	convey.Convey("When Promise is cancelled", t, func() {
 		p := NewPromise()
@@ -72,34 +76,37 @@ func TestCancel(t *testing.T) {
 		}()
 
 		convey.Convey("Should return CancelledError", func() {
-			r, err := p.Get()
-			convey.So(r, convey.ShouldBeNil)
+			val, err := p.Get()
+			convey.So(val, convey.ShouldBeNil)
 			convey.So(err, convey.ShouldEqual, CANCELLED)
 			convey.So(p.IsCancelled(), convey.ShouldBeTrue)
 		})
 	})
 }
 
+// Promise 超时机制测试
 func TestGetOrTimeout(t *testing.T) {
 	timout := 50 * time.Millisecond
 	convey.Convey("When Promise is unfinished", t, func() {
 		p := NewPromise()
+
 		go func() {
 			<-time.After(timout)
-			p.Resolve("ok")
+			p.Resolve("ok") // 成功
 		}()
-		convey.Convey("timeout should be true", func() {
-			r, err, timeout := p.GetOrTimeout(10)
-			convey.So(timeout, convey.ShouldBeTrue)
-			convey.So(r, convey.ShouldBeNil)
+
+		convey.Convey("Timeout should be true", func() {
+			val, err, timeout := p.GetOrTimeout(10)
+			convey.So(val, convey.ShouldBeNil)
 			convey.So(err, convey.ShouldBeNil)
+			convey.So(timeout, convey.ShouldBeTrue)
 		})
 
 		convey.Convey("When Promise is resolved, the argument of Resolve should be returned", func() {
-			r, err, timeout := p.GetOrTimeout(55)
-			convey.So(timeout, convey.ShouldBeFalse)
-			convey.So(r, convey.ShouldEqual, "ok")
+			val, err, timeout := p.GetOrTimeout(51) // 需要比timeout大一点
+			convey.So(val, convey.ShouldEqual, "ok")
 			convey.So(err, convey.ShouldBeNil)
+			convey.So(timeout, convey.ShouldBeFalse)
 		})
 	})
 
@@ -107,13 +114,21 @@ func TestGetOrTimeout(t *testing.T) {
 		p := NewPromise()
 		go func() {
 			<-time.After(timout)
-			p.Reject(errors.New("fail"))
+			p.Reject(errors.New("fail")) // 失败
 		}()
+
+		convey.Convey("Should return nil", func() {
+			val, err, timeout := p.GetOrTimeout(10)
+			convey.So(val, convey.ShouldBeNil)
+			convey.So(err, convey.ShouldBeNil)
+			convey.So(timeout, convey.ShouldBeTrue)
+		})
+
 		convey.Convey("Should return error", func() {
-			r, err, timeout := p.GetOrTimeout(83)
-			convey.So(timeout, convey.ShouldBeFalse)
-			convey.So(r, convey.ShouldBeNil)
+			val, err, timeout := p.GetOrTimeout(51)
+			convey.So(val, convey.ShouldBeNil)
 			convey.So(err, convey.ShouldNotBeNil)
+			convey.So(timeout, convey.ShouldBeFalse)
 		})
 	})
 
@@ -121,13 +136,24 @@ func TestGetOrTimeout(t *testing.T) {
 		p := NewPromise()
 		go func() {
 			<-time.After(timout)
-			p.Cancel()
+			p.Cancel() // 取消
 		}()
+
+		convey.Convey("Should return nil", func() {
+			val, err, timeout := p.GetOrTimeout(10)
+			convey.So(val, convey.ShouldBeNil)
+			convey.So(err, convey.ShouldBeNil)
+			convey.So(timeout, convey.ShouldBeTrue)
+
+			convey.So(p.IsCancelled(), convey.ShouldBeFalse)
+		})
+
 		convey.Convey("Should return CancelledError", func() {
-			r, err, timeout := p.GetOrTimeout(83)
-			convey.So(timeout, convey.ShouldBeFalse)
-			convey.So(r, convey.ShouldBeNil)
+			val, err, timeout := p.GetOrTimeout(51)
+			convey.So(val, convey.ShouldBeNil)
 			convey.So(err, convey.ShouldEqual, CANCELLED)
+			convey.So(timeout, convey.ShouldBeFalse)
+
 			convey.So(p.IsCancelled(), convey.ShouldBeTrue)
 		})
 	})
@@ -826,11 +852,11 @@ func TestWhenAll(t *testing.T) {
 			convey.So(err, convey.ShouldBeNil)
 		})
 
-		convey.Convey("When all tasks completed, and the task1 is the first to complete", func() {
-			//r, err := whenTwoTask(230, 200).Get()
-			//	convey.So(r, shouldSlicesReSame, []interface{}{"ok0", "ok1"})
-			//	convey.So(err, convey.ShouldBeNil)
-		})
+		//convey.Convey("When all tasks completed, and the task1 is the first to complete", func() {
+		//	r, err := whenTwoTask(230, 200).Get()
+		//	convey.So(r, shouldSlicesReSame, []interface{}{"ok0", "ok1"})
+		//	convey.So(err, convey.ShouldBeNil)
+		//})
 
 		convey.Convey("When task1 failed, but task2 is completed", func() {
 			r, err := whenTwoTask(-250, 210).Get()
