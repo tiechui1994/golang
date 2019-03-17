@@ -200,73 +200,80 @@ func WhenAnyMatched(predicate func(interface{}) bool, actions ...interface{}) *F
 // 返回一个Future
 // 如果所有的Future都成功执行, 当前的Future也会成功执行并且返回相应的结果数组(成功执行的Future的结果);
 // 否则, 当前的Future将会执行失败, 并且返回所有Future的执行结果.
-func WhenAll(actions ...interface{}) (fu *Future) {
-	pr := NewPromise()
-	fu = pr.Future
+func WhenAll(actions ...interface{}) (future *Future) {
+	promise := NewPromise()
+	future = promise.Future
 
 	if len(actions) == 0 {
-		pr.Resolve([]interface{}{})
+		promise.Resolve([]interface{}{})
 		return
 	}
 
-	fs := make([]*Future, len(actions))
+	// todo: function封装成Future
+	functions := make([]*Future, len(actions))
 	for i, act := range actions {
-		fs[i] = Start(act)
+		functions[i] = Start(act)
 	}
-	fu = whenAllFuture(fs...)
+
+	future = whenAllFuture(functions...)
+
 	return
 }
 
 // 返回一个Future
 // 如果所有的Future都成功执行, 当前的Future也会成功执行并且返回相应的结果数组(成功执行的Future的结果).
-// 如果任何一个Future都被取消, 当前的Future也会被取消; 否则, 当前的Future将会执行失败, 并且返回所有Future的执行结果.
-func whenAllFuture(fs ...*Future) *Future {
-	wf := NewPromise()
-	rs := make([]interface{}, len(fs))
+// 如果任何一个Future被取消, 当前的Future也会被取消; 否则, 当前的Future将会执行失败, 并且返回所有Future的执行结果.
+func whenAllFuture(futures ...*Future) *Future {
+	promise := NewPromise()
+	results := make([]interface{}, len(futures))
 
-	if len(fs) == 0 {
-		wf.Resolve([]interface{}{})
+	if len(futures) == 0 {
+		promise.Resolve([]interface{}{})
 	} else {
-		n := int32(len(fs))
+		n := int32(len(futures))
 		cancelOthers := func(j int) {
-			for k, f1 := range fs {
+			for k, future := range futures {
 				if k != j {
-					f1.Cancel()
+					future.Cancel()
 				}
 			}
 		}
 
+		// todo 逻辑: 全部成功->成功, 任何一下取消->取消, 任何一个失败 -> 失败
 		go func() {
-			isCancelled := int32(0)
-			for i, f := range fs {
+			isCancelled := int32(0) // 只能设置一次
+			for i, future := range futures {
 				j := i
-
-				f.OnSuccess(func(v interface{}) {
-					rs[j] = v
+				// 注册函数
+				future.OnSuccess(func(v interface{}) {
+					results[j] = v
 					if atomic.AddInt32(&n, -1) == 0 {
-						wf.Resolve(rs)
+						promise.Resolve(results)
 					}
-				}).OnFailure(func(v interface{}) {
+				})
+
+				future.OnFailure(func(v interface{}) {
+					// 任何一个失败, 当前Future失败
 					if atomic.CompareAndSwapInt32(&isCancelled, 0, 1) {
-						//try to cancel all futures
+
 						cancelOthers(j)
 
-						//errs := make([]error, 0, 1)
-						//errs = append(errs, v.(error))
 						e := newAggregateError1("Error appears in WhenAll:", v)
-						wf.Reject(e)
+						promise.Reject(e) // 失败
 					}
-				}).OnCancel(func() {
+				})
+
+				future.OnCancel(func() {
 					if atomic.CompareAndSwapInt32(&isCancelled, 0, 1) {
-						//try to cancel all futures
+
 						cancelOthers(j)
 
-						wf.Cancel()
+						promise.Cancel() // 取消
 					}
 				})
 			}
 		}()
 	}
 
-	return wf.Future
+	return promise.Future
 }

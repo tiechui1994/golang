@@ -828,8 +828,8 @@ func TestWhenAll(t *testing.T) {
 
 		convey.Convey("When all tasks completed, and the task1 is the first to complete", func() {
 			//r, err := whenTwoTask(230, 200).Get()
-		//	convey.So(r, shouldSlicesReSame, []interface{}{"ok0", "ok1"})
-		//	convey.So(err, convey.ShouldBeNil)
+			//	convey.So(r, shouldSlicesReSame, []interface{}{"ok0", "ok1"})
+			//	convey.So(err, convey.ShouldBeNil)
 		})
 
 		convey.Convey("When task1 failed, but task2 is completed", func() {
