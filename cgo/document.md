@@ -538,7 +538,7 @@ q = (*Y)(unsafe.Pointer(p))  // *X => *Y
 p = (*X)(unsafe.Pointer(q))  // *Y => *X
 ```
 
-![avatar](pictures/x-ptr-to-y-ptr.png)
+![avatar](../resource/cgo-x-ptr-to-y-ptr.png)
 
 ### 数值和指针的转换
 
@@ -546,7 +546,7 @@ p = (*X)(unsafe.Pointer(q))  // *Y => *X
 指针类型特别定义了uintptr类型. 以uintptr为中介, 实现数值类型到 unsafe.Pointer 指针类型的转换.
 再结合前面提到的方法, 就可以实现数值和指针的转换了.
 
-![avatar](pictures/int32-to-char-ptr.png)
+![avatar](../resource/cgo-int32-to-char-ptr.png)
 
 ### 切片间的转换
 
@@ -567,7 +567,7 @@ pHdr.Cap = qHdr.Cap * unsafe.Sizeof(q[0]) / unsafe.Sizeof(p[0])
 如果X和Y的类型的大小不同, 需要重新设置Len和Cap属性. 需要注意的是, 如果X或Y是空类型, 上述
 代码可能导致除0错误, 实际代码需要根据情况酌情处理.
 
-![avatar](pictures/x-slice-to-y-slice.png)
+![avatar](../resource/cgo-x-slice-to-y-slice.png)
 
 ------------------------------------------------------------------------------------------------------------------------
 
