@@ -161,12 +161,14 @@ func TestGetOrTimeout(t *testing.T) {
 
 func TestGetChan(t *testing.T) {
 	timout := 50 * time.Millisecond
+
 	convey.Convey("When Promise is resolved", t, func() {
 		p := NewPromise()
 		go func() {
 			<-time.After(timout)
 			p.Resolve("ok")
 		}()
+
 		convey.Convey("Should receive the argument of Resolve from returned channel", func() {
 			fr, ok := <-p.GetChan()
 			convey.So(fr.Result, convey.ShouldEqual, "ok")
@@ -181,6 +183,7 @@ func TestGetChan(t *testing.T) {
 			<-time.After(timout)
 			p.Reject(errors.New("fail"))
 		}()
+
 		convey.Convey("Should receive error from returned channel", func() {
 			fr, ok := <-p.GetChan()
 			convey.So(fr.Result, convey.ShouldNotBeNil)
@@ -195,6 +198,7 @@ func TestGetChan(t *testing.T) {
 			<-time.After(timout)
 			p.Cancel()
 		}()
+
 		convey.Convey("Should receive CancelledError from returned channel", func() {
 			fr, ok := <-p.GetChan()
 			convey.So(fr.Result, convey.ShouldEqual, CANCELLED)

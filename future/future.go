@@ -24,13 +24,15 @@ type pipe struct {
 }
 
 // getPipe returns piped Future task function and pipe Promise by the status of current Promise.
-func (future *pipe) getPipe(isResolved bool) (func(v interface{}) *Future, *Promise) {
+func (pipe *pipe) getPipe(isResolved bool) (func(v interface{}) *Future, *Promise) {
 	if isResolved {
-		return future.pipeDoneTask, future.pipePromise
+		return pipe.pipeDoneTask, pipe.pipePromise
 	} else {
-		return future.pipeFailTask, future.pipePromise
+		return pipe.pipeFailTask, pipe.pipePromise
 	}
 }
+
+//----------------------------------------------------------------------------------------------------------------------
 
 // 检查Future是否被取消
 // 它通常被传递给Future任务函数, Future任务函数可以检查Future是否被取消
@@ -40,21 +42,23 @@ type Canceller interface {
 }
 
 type canceller struct {
-	f *Future
+	future *Future
 }
 
 // 将 Future 的状态设置为 CANCELLED
-func (future *canceller) Cancel() {
-	future.f.Cancel()
+func (cancel *canceller) Cancel() {
+	cancel.future.Cancel()
 }
 
 // 确定Future的状态是否被取消
-func (future *canceller) IsCancelled() (r bool) {
-	return future.f.IsCancelled()
+func (cancel *canceller) IsCancelled() (r bool) {
+	return cancel.future.IsCancelled()
 }
 
+//----------------------------------------------------------------------------------------------------------------------
+
 // 存储最终Future的状态
-type futureVal struct {
+type futureValue struct {
 	dones, fails, always []func(v interface{})
 	cancels              []func()
 	pipes                []*pipe
@@ -63,12 +67,23 @@ type futureVal struct {
 
 // Future 提供的是一个只读的Promise的视图. 它的值在调用Promise的 Resolve | Reject | Cancel 方法之后被确定
 type Future struct {
-	Id    int // Future的唯一标识
+	ID    int // Future的唯一标识
 	final chan struct{}
+	// value 是 futureValue的一个指针.
+	// 如果需要修改Future的状态, 必须先copy一个新的futureValue, 并修改它的值, 然后使用CAS将这新的futureValue设置给value
+	value unsafe.Pointer
+}
 
-	// val是 futureVal的一个指针.
-	// 如果需要修改Future的状态, 必须先copy一个新的futureVal, 并修改它的值, 然后使用CAS将这新的futureVal设置给val
-	val unsafe.Pointer
+//  Point -> Object -> Field
+func (future *Future) loadResult() *PromiseResult {
+	value := future.loadValue()
+	return value.result
+}
+
+// Point -> Object的转换
+func (future *Future) loadValue() *futureValue {
+	value := atomic.LoadPointer(&future.value)
+	return (*futureValue)(value)
 }
 
 // Canceller returns a canceller object related to future.
@@ -76,22 +91,10 @@ func (future *Future) Canceller() Canceller {
 	return &canceller{future}
 }
 
-//  Point -> Object -> Field
-func (future *Future) loadResult() *PromiseResult {
-	val := future.loadVal()
-	return val.result
-}
-
-// Point -> Object的转换
-func (future *Future) loadVal() *futureVal {
-	r := atomic.LoadPointer(&future.val)
-	return (*futureVal)(r)
-}
-
 func (future *Future) IsCancelled() bool {
-	val := future.loadVal()
+	value := future.loadValue()
 
-	if val != nil && val.result != nil && val.result.Type == RESULT_CANCELLED {
+	if value != nil && value.result != nil && value.result.Type == RESULT_CANCELLED {
 		return true
 	} else {
 		return false
@@ -99,15 +102,15 @@ func (future *Future) IsCancelled() bool {
 }
 
 // 设置Future的超时时间, 单位ms
-func (future *Future) SetTimeout(mm int) *Future {
-	if mm == 0 {
-		mm = 10
+func (future *Future) SetTimeout(timeout int) *Future {
+	if timeout == 0 {
+		timeout = 10
 	} else {
-		mm = mm * 1000 * 1000
+		timeout = timeout * 1000 * 1000
 	}
 
 	go func() {
-		<-time.After((time.Duration)(mm) * time.Nanosecond)
+		<-time.After((time.Duration)(timeout) * time.Nanosecond)
 		future.Cancel()
 	}()
 	return future
@@ -235,7 +238,7 @@ func (future *Future) Pipe(callbacks ...interface{}) (result *Future, ok bool) {
 	}
 
 	for {
-		v := future.loadVal()
+		v := future.loadValue()
 		r := v.result
 		if r != nil {
 			result = future
@@ -256,7 +259,7 @@ func (future *Future) Pipe(callbacks ...interface{}) (result *Future, ok bool) {
 			newVal.pipes = append(newVal.pipes, newPipe)
 
 			// TODO: 使用 CAS 确保Future的state没有发生改变. 如果state发生改变, 将尝试CAS操作
-			if atomic.CompareAndSwapPointer(&future.val, unsafe.Pointer(v), unsafe.Pointer(&newVal)) {
+			if atomic.CompareAndSwapPointer(&future.value, unsafe.Pointer(v), unsafe.Pointer(&newVal)) {
 				result = newPipe.pipePromise.Future
 				break
 			}
@@ -279,7 +282,7 @@ func (future *Future) setResult(r *PromiseResult) (e error) { //r *PromiseResult
 	e = errors.New("cannot resolve/reject/cancel more than once")
 
 	for {
-		v := future.loadVal()
+		v := future.loadValue()
 		if v.result != nil {
 			return
 		}
@@ -289,7 +292,7 @@ func (future *Future) setResult(r *PromiseResult) (e error) { //r *PromiseResult
 		// todo: 使用 CAS 操作确保Promise的state没有发生改变
 		// todo: 如果state发生, 必须获取最新的state并且尝试再次调用 CAS
 		// todo: 原理方面的内容需要加深理解
-		if atomic.CompareAndSwapPointer(&future.val, unsafe.Pointer(v), unsafe.Pointer(&newVal)) {
+		if atomic.CompareAndSwapPointer(&future.value, unsafe.Pointer(v), unsafe.Pointer(&newVal)) {
 			// 关闭 final 确保 Get() 和 GetOrTimeout() 不再阻塞
 			close(future.final)
 
@@ -334,7 +337,7 @@ func (future *Future) addCallback(callback interface{}, t callbackType) {
 
 	// 异步执行
 	for {
-		v := future.loadVal()
+		v := future.loadValue()
 		r := v.result
 		if r == nil {
 			newVal := *v
@@ -350,7 +353,7 @@ func (future *Future) addCallback(callback interface{}, t callbackType) {
 			}
 
 			// 使用CAS确保Future的state未发生改变. 如果state发生改变, 会尝试CAS操作(函数返回的关键)
-			if atomic.CompareAndSwapPointer(&future.val, unsafe.Pointer(v), unsafe.Pointer(&newVal)) {
+			if atomic.CompareAndSwapPointer(&future.value, unsafe.Pointer(v), unsafe.Pointer(&newVal)) {
 				break
 			}
 		} else {

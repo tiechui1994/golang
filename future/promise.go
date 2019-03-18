@@ -87,7 +87,7 @@ func (promise *Promise) OnCancel(callback func()) *Promise {
 }
 
 func NewPromise() *Promise {
-	val := &futureVal{
+	val := &futureValue{
 		dones:   make([]func(v interface{}), 0, 8),
 		fails:   make([]func(v interface{}), 0, 8),
 		always:  make([]func(v interface{}), 0, 4),
@@ -98,9 +98,9 @@ func NewPromise() *Promise {
 
 	f := &Promise{
 		Future: &Future{
-			Id:    rand.Int(),
+			ID:    rand.Int(),
 			final: make(chan struct{}),
-			val:   unsafe.Pointer(val),
+			value:   unsafe.Pointer(val),
 		},
 	}
 	return f
