@@ -229,6 +229,7 @@ func TestFuture(t *testing.T) {
 				}()
 				fu = p.Future
 			}()
+
 			r, err := fu.Get()
 			convey.So(r, convey.ShouldEqual, "ok")
 			convey.So(err, convey.ShouldBeNil)
@@ -290,11 +291,11 @@ func TestCallbacks(t *testing.T) {
 			fail = true
 			panic("Unexpected calling")
 		})
-		r, err := p.Get()
+		r, err := p.Get() // 这个时候, Promise执行完毕, 但是其回调函数未开始执行
 
 		//The code after Get() and the callback will be concurrent run
-		//So sleep 52 ms to wait all callback be done
-		time.Sleep(52 * time.Millisecond)
+		//So sleep 5 ms to wait all callback be done
+		time.Sleep(5 * time.Millisecond)
 
 		convey.Convey("Should call the Done and Always callbacks", func() {
 			convey.So(r, convey.ShouldEqual, "ok")
@@ -321,6 +322,7 @@ func TestCallbacks(t *testing.T) {
 			fail = true
 			panic("Unexpected calling")
 		})
+
 		convey.Convey("Should immediately run the Done and Always callbacks", func() {
 			convey.So(done, convey.ShouldEqual, true)
 			convey.So(always, convey.ShouldEqual, true)
@@ -353,7 +355,7 @@ func TestCallbacks(t *testing.T) {
 		})
 		r, err := p.Get()
 
-		time.Sleep(52 * time.Millisecond)
+		time.Sleep(5 * time.Millisecond)
 
 		convey.Convey("Should call the Fail and Always callbacks", func() {
 			convey.So(r, convey.ShouldEqual, nil)
@@ -407,7 +409,7 @@ func TestCallbacks(t *testing.T) {
 		})
 		r, err := p.Get()
 
-		time.Sleep(62 * time.Millisecond)
+		time.Sleep(5 * time.Millisecond)
 
 		convey.Convey("Only cancel callback be called", func() {
 			convey.So(r, convey.ShouldBeNil)
@@ -440,8 +442,8 @@ func TestCallbacks(t *testing.T) {
 
 }
 
+// 验证的是 Start() 同步执行
 func TestStart(t *testing.T) {
-
 	convey.Convey("Test start func()", t, func() {
 		convey.Convey("When task completed", func() {
 			f := Start(func() {})
@@ -830,6 +832,7 @@ func TestWhenAnyTrue(t *testing.T) {
 func TestWhenAll(t *testing.T) {
 	startTwoTask := func(t1 int, t2 int) (f *Future) {
 		timeouts := []time.Duration{time.Duration(t1), time.Duration(t2)}
+
 		getTask := func(i int) func() (interface{}, error) {
 			return func() (interface{}, error) {
 				if timeouts[i] > 0 {
@@ -841,26 +844,29 @@ func TestWhenAll(t *testing.T) {
 				}
 			}
 		}
+
 		task0 := getTask(0)
 		task1 := getTask(1)
 		f = WhenAll(task0, task1)
 		return f
 	}
+
 	convey.Convey("Test WhenAllFuture", t, func() {
 		whenTwoTask := func(t1 int, t2 int) *Future {
 			return startTwoTask(t1, t2)
 		}
+
 		convey.Convey("When all tasks completed, and the task1 is the first to complete", func() {
-			r, err := whenTwoTask(200, 230).Get()
+			r, err := whenTwoTask(200, 300).Get()
 			convey.So(r, shouldSlicesReSame, []interface{}{"ok0", "ok1"})
 			convey.So(err, convey.ShouldBeNil)
 		})
 
-		//convey.Convey("When all tasks completed, and the task1 is the first to complete", func() {
-		//	r, err := whenTwoTask(230, 200).Get()
-		//	convey.So(r, shouldSlicesReSame, []interface{}{"ok0", "ok1"})
-		//	convey.So(err, convey.ShouldBeNil)
-		//})
+		convey.Convey("When all tasks completed, and the task2 is the first to complete", func() {
+			r, err := whenTwoTask(300, 200).Get()
+			convey.So(r, shouldSlicesReSame, []interface{}{"ok0", "ok1"})
+			convey.So(err, convey.ShouldBeNil)
+		})
 
 		convey.Convey("When task1 failed, but task2 is completed", func() {
 			r, err := whenTwoTask(-250, 210).Get()

@@ -1,8 +1,8 @@
 package future
 
 import (
-	"math/rand"
 	"unsafe"
+	"math/rand"
 )
 
 var (
@@ -43,10 +43,18 @@ type Promise struct {
 	*Future
 }
 
+/*********************************************************************
+
+ 方法总体说明:
+	1. Cancel() Resolve() Reject(), 这些方法的调用会导致Promise任务执行完毕
+	2. OnXxx() 此类型的方法是设置回调函数, 应当在Promise的任务执行完毕前调用添加
+
+*********************************************************************/
+
 // Cancel() 会将 Promise 的结果的 Type 设置为RESULT_CANCELLED。
 // 如果promise被取消了, 调用Get()将返回nil和CANCELED错误. 并且所有的回调函数将不会被执行
 func (promise *Promise) Cancel() (e error) {
-	return promise.Future.Cancel()
+	return promise.setResult(&PromiseResult{CANCELLED, RESULT_CANCELLED})
 }
 
 // Resolve() 会将 Promise 的结果的 Type 设置为RESULT_SUCCESS. Result设置为特定值
@@ -87,7 +95,7 @@ func (promise *Promise) OnCancel(callback func()) *Promise {
 }
 
 func NewPromise() *Promise {
-	val := &futureValue{
+	value := &futureValue{
 		dones:   make([]func(v interface{}), 0, 8),
 		fails:   make([]func(v interface{}), 0, 8),
 		always:  make([]func(v interface{}), 0, 4),
@@ -96,12 +104,13 @@ func NewPromise() *Promise {
 		result:  nil,
 	}
 
-	f := &Promise{
+	promise := &Promise{
 		Future: &Future{
 			ID:    rand.Int(),
 			final: make(chan struct{}),
-			value:   unsafe.Pointer(val),
+			value: unsafe.Pointer(value),
 		},
 	}
-	return f
+
+	return promise
 }

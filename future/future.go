@@ -86,7 +86,7 @@ func (future *Future) loadValue() *futureValue {
 	return (*futureValue)(value)
 }
 
-// Canceller returns a canceller object related to future.
+// TODO Future的取消状态的获取机制:使用当前的Future去获取其状态
 func (future *Future) Canceller() Canceller {
 	return &canceller{future}
 }
@@ -101,7 +101,7 @@ func (future *Future) IsCancelled() bool {
 	}
 }
 
-// 设置Future的超时时间, 单位ms
+// 设置Future的超时时间, 单位ms,
 func (future *Future) SetTimeout(timeout int) *Future {
 	if timeout == 0 {
 		timeout = 10
@@ -113,10 +113,11 @@ func (future *Future) SetTimeout(timeout int) *Future {
 		<-time.After((time.Duration)(timeout) * time.Nanosecond)
 		future.Cancel()
 	}()
+
 	return future
 }
 
-// 返回一个 chan PromiseResult, 是Promise的结果
+// TODO 返回一个 chan PromiseResult, 真正的结果是在Promise执行完成之后赋值. 可以使用 chan 进行阻塞调用
 func (future *Future) GetChan() <-chan *PromiseResult {
 	c := make(chan *PromiseResult, 1)
 	future.OnComplete(func(v interface{}) {
@@ -127,22 +128,22 @@ func (future *Future) GetChan() <-chan *PromiseResult {
 	return c
 }
 
-// todo: 获取 Future 的结果, 一直阻塞调用, 直到有结果返回, 需要重点解析 getFutureReturnVal() 方法
-func (future *Future) Get() (val interface{}, err error) {
+// TODO 获取Future的结果, 一直阻塞调用, 直到有结果返回.
+func (future *Future) Get() (value interface{}, err error) {
 	<-future.final
 	return getFutureReturnVal(future.loadResult())
 }
 
-// todo: 类似Get()方法, 阻塞的时间最多是 mm 毫秒, 就会有返回结果
-func (future *Future) GetOrTimeout(mm uint) (val interface{}, err error, timout bool) {
-	if mm == 0 {
-		mm = 10
+// TODO 类似Get()方法, 阻塞的时间最多是 timeout 毫秒, 就会有返回结果.
+func (future *Future) GetOrTimeout(timeout uint) (value interface{}, err error, timout bool) {
+	if timeout == 0 {
+		timeout = 10
 	} else {
-		mm = mm * 1000 * 1000
+		timeout = timeout * 1000 * 1000
 	}
 
 	select {
-	case <-time.After((time.Duration)(mm) * time.Nanosecond):
+	case <-time.After((time.Duration)(timeout) * time.Nanosecond):
 		return nil, nil, true
 	case <-future.final:
 		r, err := getFutureReturnVal(future.loadResult())
@@ -150,7 +151,7 @@ func (future *Future) GetOrTimeout(mm uint) (val interface{}, err error, timout 
 	}
 }
 
-// 设置 Promise 的状态为 RESULT_CANCELLED
+// 设置 Promise 的状态为 RESULT_CANCELLED.
 func (future *Future) Cancel() (e error) {
 	return future.setResult(&PromiseResult{CANCELLED, RESULT_CANCELLED})
 }
@@ -179,18 +180,18 @@ func (future *Future) OnCancel(callback func()) *Future {
 	return future
 }
 
-// 注册 一个或者两个回调函数. 并且返回 代理的 Futura
+// 注册 一个或者两个回调函数. 并且返回 `代理的Future`
 // 当Future成功返回, 第一个回调函数被调用
 // 当Future失败返回, 第二个回调函数被调用
-func (future *Future) Pipe(callbacks ...interface{}) (result *Future, ok bool) {
+func (future *Future) Pipe(callbacks ...interface{}) (new *Future, ok bool) {
 	if len(callbacks) == 0 ||
 		(len(callbacks) == 1 && callbacks[0] == nil) ||
 		(len(callbacks) > 1 && callbacks[0] == nil && callbacks[1] == nil) {
-		result = future
+		new = future
 		return
 	}
 
-	//todo: 验证回调函数的格式 "func(v interface{}) *Future"
+	// todo: 验证回调函数的格式 "func(v interface{}) *Future"
 	cs := make([]func(v interface{}) *Future, len(callbacks), len(callbacks))
 	for i, callback := range callbacks {
 		if function, status := callback.(func(v interface{}) *Future); status {
@@ -238,15 +239,17 @@ func (future *Future) Pipe(callbacks ...interface{}) (result *Future, ok bool) {
 	}
 
 	for {
-		v := future.loadValue()
-		r := v.result
-		if r != nil {
-			result = future
-			if r.Type == RESULT_SUCCESS && cs[0] != nil {
-				result = cs[0](r.Result)
-			} else if r.Type == RESULT_FAILURE && len(cs) > 1 && cs[1] != nil {
-				result = cs[1](r.Result)
+		value := future.loadValue()
+		result := value.result // 对于初始化的Promise,其result值是nil
+
+		if result != nil { // Promise 执行完成
+			new = future
+			if result.Type == RESULT_SUCCESS && cs[0] != nil {
+				new = cs[0](result.Result)
+			} else if result.Type == RESULT_FAILURE && len(cs) > 1 && cs[1] != nil {
+				new = cs[1](result.Result)
 			}
+
 		} else {
 			newPipe := &pipe{}
 			newPipe.pipeDoneTask = cs[0]
@@ -255,12 +258,12 @@ func (future *Future) Pipe(callbacks ...interface{}) (result *Future, ok bool) {
 			}
 			newPipe.pipePromise = NewPromise()
 
-			newVal := *v
+			newVal := *value
 			newVal.pipes = append(newVal.pipes, newPipe)
 
 			// TODO: 使用 CAS 确保Future的state没有发生改变. 如果state发生改变, 将尝试CAS操作
-			if atomic.CompareAndSwapPointer(&future.value, unsafe.Pointer(v), unsafe.Pointer(&newVal)) {
-				result = newPipe.pipePromise.Future
+			if atomic.CompareAndSwapPointer(&future.value, unsafe.Pointer(value), unsafe.Pointer(&newVal)) {
+				new = newPipe.pipePromise.Future
 				break
 			}
 		}
@@ -270,60 +273,12 @@ func (future *Future) Pipe(callbacks ...interface{}) (result *Future, ok bool) {
 	return
 }
 
-// 设置 Promise 最终的状态和结果, 只能被执行一次
-func (future *Future) setResult(r *PromiseResult) (e error) { //r *PromiseResult) {
-	defer func() {
-		if err := getError(recover()); err != nil {
-			e = err
-			fmt.Println("\nerror in setResult():", err)
-		}
-	}()
-
-	e = errors.New("cannot resolve/reject/cancel more than once")
-
-	for {
-		v := future.loadValue()
-		if v.result != nil {
-			return
-		}
-		newVal := *v
-		newVal.result = r
-
-		// todo: 使用 CAS 操作确保Promise的state没有发生改变
-		// todo: 如果state发生, 必须获取最新的state并且尝试再次调用 CAS
-		// todo: 原理方面的内容需要加深理解
-		if atomic.CompareAndSwapPointer(&future.value, unsafe.Pointer(v), unsafe.Pointer(&newVal)) {
-			// 关闭 final 确保 Get() 和 GetOrTimeout() 不再阻塞
-			close(future.final)
-
-			// call callback functions and start the Promise pipeline
-			if len(v.dones) > 0 || len(v.fails) > 0 || len(v.always) > 0 || len(v.cancels) > 0 {
-				go func() {
-					execCallback(r, v.dones, v.fails, v.always, v.cancels)
-				}()
-			}
-
-			// start the pipeline
-			if len(v.pipes) > 0 {
-				go func() {
-					for _, pipe := range v.pipes {
-						pipeTask, pipePromise := pipe.getPipe(r.Type == RESULT_SUCCESS)
-						startPipe(r, pipeTask, pipePromise)
-					}
-				}()
-			}
-			e = nil
-			break
-		}
-	}
-	return
-}
-
-// 注册回调函数
+// TODO 注册回调函数(Promise的任何时候)
 func (future *Future) addCallback(callback interface{}, t callbackType) {
 	if callback == nil {
 		return
 	}
+
 	// 回调函数类型和回调函数要匹配
 	if (t == CALLBACK_DONE) || (t == CALLBACK_FAIL) || (t == CALLBACK_ALWAYS) {
 		if _, ok := callback.(func(v interface{})); !ok {
@@ -335,12 +290,11 @@ func (future *Future) addCallback(callback interface{}, t callbackType) {
 		}
 	}
 
-	// 异步执行
 	for {
-		v := future.loadValue()
-		r := v.result
-		if r == nil {
-			newVal := *v
+		value := future.loadValue()
+		result := value.result // 新创建的 Promise 其result的值是nil
+		if result == nil {
+			newVal := *value
 			switch t {
 			case CALLBACK_DONE:
 				newVal.dones = append(newVal.dones, callback.(func(v interface{})))
@@ -353,21 +307,72 @@ func (future *Future) addCallback(callback interface{}, t callbackType) {
 			}
 
 			// 使用CAS确保Future的state未发生改变. 如果state发生改变, 会尝试CAS操作(函数返回的关键)
-			if atomic.CompareAndSwapPointer(&future.value, unsafe.Pointer(v), unsafe.Pointer(&newVal)) {
+			if atomic.CompareAndSwapPointer(&future.value, unsafe.Pointer(value), unsafe.Pointer(&newVal)) {
 				break
 			}
 		} else {
 			// 执行回调函数
-			if (t == CALLBACK_DONE && r.Type == RESULT_SUCCESS) ||
-				(t == CALLBACK_FAIL && r.Type == RESULT_FAILURE) ||
-				(t == CALLBACK_ALWAYS && r.Type != RESULT_CANCELLED) {
+			if (t == CALLBACK_DONE && result.Type == RESULT_SUCCESS) ||
+				(t == CALLBACK_FAIL && result.Type == RESULT_FAILURE) ||
+				(t == CALLBACK_ALWAYS && result.Type != RESULT_CANCELLED) {
 				callbackFunc := callback.(func(v interface{}))
-				callbackFunc(r.Result)
-			} else if t == CALLBACK_CANCEL && r.Type == RESULT_CANCELLED {
+				callbackFunc(result.Result)
+			} else if t == CALLBACK_CANCEL && result.Type == RESULT_CANCELLED {
 				callbackFunc := callback.(func())
 				callbackFunc()
 			}
 			break
 		}
 	}
+}
+
+// TODO 设置Promise的执行结果, 只能被执行一次. 当设置完成Promise的结果之后, 需要开始回调函数的执行
+func (future *Future) setResult(result *PromiseResult) (e error) {
+	defer func() {
+		if err := getError(recover()); err != nil {
+			e = err
+			fmt.Println("\nerror in setResult():", err)
+		}
+	}()
+
+	e = errors.New("cannot resolve/reject/cancel more than once")
+
+	for {
+		value := future.loadValue()
+		if value.result != nil {
+			return
+		}
+
+		newVal := *value
+		newVal.result = result
+
+		// todo: 使用 CAS 操作确保Promise的state没有发生改变
+		// todo: 如果state发生, 必须获取最新的state并且尝试再次调用 CAS
+		// todo: 原理方面的内容需要加深理解
+		if atomic.CompareAndSwapPointer(&future.value, unsafe.Pointer(value), unsafe.Pointer(&newVal)) {
+			// 关闭 final 确保 Get() 和 GetOrTimeout() 不再阻塞
+			close(future.final)
+
+			// call callback functions and start the Promise pipeline
+			if len(value.dones) > 0 || len(value.fails) > 0 || len(value.always) > 0 || len(value.cancels) > 0 {
+				go func() {
+					execCallback(result, value.dones, value.fails, value.always, value.cancels)
+				}()
+			}
+
+			// start the pipeline
+			if len(value.pipes) > 0 {
+				go func() {
+					for _, pipe := range value.pipes {
+						pipeTask, pipePromise := pipe.getPipe(result.Type == RESULT_SUCCESS)
+						startPipe(result, pipeTask, pipePromise)
+					}
+				}()
+			}
+			e = nil
+			break
+		}
+	}
+
+	return
 }
