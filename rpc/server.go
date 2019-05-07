@@ -60,6 +60,17 @@ func RegisterNative() {
 
 // ----------------- protobuf rpc service ---------------------------
 // proto: hello.proto
+// protoc --go_out=./service hello.proto // no plugin
+// protoc --go_out=plugins=grpc:./service hello.proto // use plugin
+//
+// no plugin depend:
+// 	github.com/golang/protobuf
+//
+// plugin depend:
+// 	github.com/golang/protobuf
+// 	google.golang.org/grpc -> github.com/grpc/grpc-go
+// 	google.golang.org/genproto -> github.com/google/go-genproto
+// 	golang.org/x/net -> github/golang/net
 type ProtoHello struct {
 }
 
