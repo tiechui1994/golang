@@ -105,3 +105,64 @@ func TestData(t *testing.T) {
 	pMap := (*Map)(unsafe.Pointer(&mp))
 	fmt.Printf("%+v", *pMap)
 }
+
+// ------------------- range.go ------------------
+func TestRange_ForRange(t *testing.T) {
+	ForRange()
+}
+
+// ------------------- defer.go ------------------
+func TestDefer_DeferExecute(t *testing.T) {
+	DeferExecute()
+}
+
+func TestDefer_DeferInit(t *testing.T) {
+	DeferInit()
+	fmt.Println("======================")
+	DeferParam()
+}
+
+func TestDefer_Slice(t *testing.T) {
+	Slice()
+}
+
+func TestDefer_ConcurrentMap(t *testing.T) {
+	ConcurrentMap()
+}
+
+func TestDefer_UseType(t *testing.T) {
+	UseType()
+}
+
+func TestDefer_DeferAndScope(t *testing.T) {
+	DeferAndScope()
+}
+
+func TestDefer_EqualStruct(t *testing.T) {
+	EqualStruct()
+}
+
+func TestDefer_Scope(t *testing.T) {
+	Scope()
+}
+
+// ------------------- closure.go ------------------
+func TestClosure_ClosureVar(t *testing.T) {
+	ClosureVar()
+}
+
+func TestClosure_ClosureForRange(t *testing.T) {
+	ClosureForRange()
+}
+
+func TestClosure_ClosureList(t *testing.T) {
+	ClosureList()
+}
+
+func TestClosure_ClosureDefer(t *testing.T) {
+	ClosureDefer()
+}
+
+func TestArray_TransferValue(t *testing.T) {
+	TransferValue()
+}
