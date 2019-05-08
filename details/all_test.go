@@ -163,6 +163,16 @@ func TestClosure_ClosureDefer(t *testing.T) {
 	ClosureDefer()
 }
 
+// ------------------- array.go ------------------
 func TestArray_TransferValue(t *testing.T) {
 	TransferValue()
+}
+
+// ------------------- string.go ------------------
+func TestString_StringValue(t *testing.T) {
+	StringValue()
+}
+
+func TestString_StringLen(t *testing.T) {
+	StringLen()
 }
