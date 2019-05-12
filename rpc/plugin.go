@@ -34,12 +34,38 @@ func (p *netrpcPlugin) Generate(fd *generator.FileDescriptor) {
 	}
 }
 
-func (p *netrpcPlugin) genServiceCode(sdp *descriptor.ServiceDescriptorProto) {
-	p.P("// TODO:service code, Name = " + sdp.GetName())
+func (p *netrpcPlugin) genImportCode(fd *generator.FileDescriptor) {
+	p.P(`import "net/rpc"`)
 }
 
-func (p *netrpcPlugin) genImportCode(fd *generator.FileDescriptor) {
-	p.P("// TODO:import code")
+// 描述服务的元信息
+type ServiceSpec struct {
+	ServiceName string
+	MethodList  []ServiceMethodSpec
+}
+
+type ServiceMethodSpec struct {
+	MethodName     string
+	InputTypeName  string
+	OutputTypeName string
+}
+
+func (p *netrpcPlugin) buildServiceSpec(sdp *descriptor.ServiceDescriptorProto) *ServiceSpec {
+	spec := &ServiceSpec{
+		ServiceName: generator.CamelCase(sdp.GetName()),
+	}
+	for _, m := range sdp.Method {
+		spec.MethodList = append(spec.MethodList, ServiceMethodSpec{
+			MethodName:generator.CamelCase(m.GetName()),
+			InputTypeName:p.TypeName(p.ObjectNamed(m.GetInputType())),
+			OutputTypeName:p.TypeName(p.ObjectNamed(m.GetOutputType())),
+		})
+	}
+	return spec
+}
+
+func (p *netrpcPlugin) genServiceCode(sdp *descriptor.ServiceDescriptorProto) {
+	p.P("// TODO:service code, Name = " + sdp.GetName())
 }
 
 func init() {
@@ -47,7 +73,7 @@ func init() {
 }
 
 // github.com/golang/protobuf/protoc-gen-go/main.go 函数的克隆版本
-func main() {
+func grpc() {
 	g := generator.New()
 	data, err := ioutil.ReadAll(os.Stdin)
 	if err != nil {
@@ -79,6 +105,10 @@ func main() {
 	if err != nil {
 		g.Error(err, "failed to write output proto")
 	}
+}
+
+func main() {
+
 }
 
 // 插件使用:
