@@ -4,6 +4,7 @@ import (
 	"time"
 	"encoding/hex"
 
+	crand "crypto/rand"
 	mrand "math/rand"
 )
 

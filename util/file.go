@@ -6,6 +6,7 @@ import (
 	"path"
 	"encoding/hex"
 	"bytes"
+	"fmt"
 )
 
 // FileExists reports whether the named file or directory exists.

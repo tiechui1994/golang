@@ -34,11 +34,9 @@ func init() {
 	fd, _ := os.Open("./area.json")
 	decoder := json.NewDecoder(fd)
 	decoder.Decode(&area)
-
-	fmt.Println(area)
 }
 
-func identity(card string) (ok bool, addr, birth, sex string) {
+func Identity(card string) (ok bool, addr, birth, sex string) {
 	if regex.MatchString(card) {
 		var y, m, d, s = "", "", "", ""
 		sex = "男"
